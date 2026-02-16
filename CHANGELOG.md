@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.0.4] — 2026-02-16
+
+### Added
+- PN length validation - flags part numbers >30 characters for human review
+- MFG/PN duplicate detection - catches when MFG and PN are identical
+- Comprehensive test suite with 6 validation phases (accuracy, QA, unit, scale, normalization, edge cases)
+- Quick smoke tests for rapid development iteration
+- Test convenience script (`./run_tests.sh`)
+- Gamma presentation metrics documentation with validated numbers
+- Complete testing guide for developers
+
+### Improved
+- Instruction parser confidence: "description column" now hits 100% (was 67%)
+- Widened synonym matching for natural language variations
+- Enhanced QA engine with `PN_too_long` and `MFG_equals_PN` rules
+- Organized documentation structure (docs/ directory with README)
+
+### Fixed
+- Long concatenated part numbers now flagged for review instead of polluting output
+- Instruction parser handles generic column references with full confidence
+
+### Validated
+- 89.4% MFG accuracy on 206 production rows
+- 95.0% PN accuracy on 206 production rows
+- 15,214 rows/second processing speed
+- Zero critical QA violations
+
+---
+
 ## [2.0.0] — 2026-02-16
 
 ### Changed
