@@ -813,15 +813,25 @@ class WescoMROParser(ctk.CTk):
             return
 
         try:
-            if path.endswith('.csv'):
+            # Ensure proper file extension
+            if path.lower().endswith('.csv'):
                 self.df_output.to_csv(path, index=False)
             else:
+                # Force .xlsx extension if not present
+                if not path.lower().endswith(('.xlsx', '.xls')):
+                    path = path + '.xlsx'
                 self.df_output.to_excel(path, index=False, engine='openpyxl')
 
             # Also export QA report if there are issues
             if self.job_result and self.job_result.issues:
-                qa_path = path.replace('.xlsx', ' - QA Issues.xlsx').replace('.csv', ' - QA Issues.csv')
-                pd.DataFrame(self.job_result.issues).to_excel(qa_path, index=False, engine='openpyxl')
+                if path.lower().endswith('.csv'):
+                    qa_path = path.replace('.csv', ' - QA Issues.csv')
+                    pd.DataFrame(self.job_result.issues).to_csv(qa_path, index=False)
+                else:
+                    qa_path = path.replace('.xlsx', ' - QA Issues.xlsx')
+                    if not qa_path.endswith('.xlsx'):
+                        qa_path = qa_path + ' - QA Issues.xlsx'
+                    pd.DataFrame(self.job_result.issues).to_excel(qa_path, index=False, engine='openpyxl')
                 self.status_label.configure(text=f"✓ Exported: {os.path.basename(path)} + QA report")
             else:
                 self.status_label.configure(text=f"✓ Exported: {os.path.basename(path)}")
