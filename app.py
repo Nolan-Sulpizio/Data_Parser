@@ -25,6 +25,8 @@ from engine.parser_core import (
     pipeline_mfg_pn, pipeline_part_number, pipeline_sim_builder, run_qa
 )
 from engine.instruction_parser import parse_instruction, auto_detect_pipeline
+from engine.column_mapper import map_columns, format_mapping_summary
+from engine.training import load_training_data, ingest_training_files
 from engine import history_db
 
 # ═══════════════════════════════════════════════════════════════
@@ -74,6 +76,12 @@ class WescoMROParser(ctk.CTk):
         self.df_output: pd.DataFrame = None
         self.job_result = None
         self.is_processing = False
+        self.column_mapping: dict = None
+        self.training_data: dict = None
+
+        # Load training data at startup
+        training_path = os.path.join(os.path.dirname(__file__), 'training_data.json')
+        self.training_data = load_training_data(training_path)
 
         # Layout: Sidebar + Main content
         self._build_sidebar()
@@ -235,6 +243,25 @@ class WescoMROParser(ctk.CTk):
                 "• Not specifying which columns to use",
             ],
         }
+
+        # Advanced Tools section
+        ctk.CTkFrame(self.sidebar, height=1, fg_color=BRAND['border']).pack(fill='x', padx=16, pady=(12, 0))
+
+        advanced_label = ctk.CTkLabel(self.sidebar, text="ADVANCED",
+                                       font=(BRAND['font_family'], 10, 'bold'),
+                                       text_color=BRAND['text_muted'])
+        advanced_label.pack(anchor='w', padx=20, pady=(16, 8))
+
+        train_btn = ctk.CTkButton(
+            self.sidebar, text="🎓  Train from Files", anchor='w',
+            font=(BRAND['font_family'], 11),
+            fg_color='transparent',
+            hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_secondary'],
+            height=32, corner_radius=6,
+            command=self._train_from_files,
+        )
+        train_btn.pack(fill='x', padx=16, pady=2)
 
         # Version footer
         version_label = ctk.CTkLabel(self.sidebar, text="v2.1.0  •  Wesco International  •  Global Accounts",
@@ -703,6 +730,43 @@ class WescoMROParser(ctk.CTk):
         self.views['configs'].pack(fill='both', expand=True)
         self._populate_configs()
 
+    def _train_from_files(self):
+        """Open folder picker and run training data ingestion."""
+        folder = filedialog.askdirectory(
+            title="Select folder with completed training files"
+        )
+        if not folder:
+            return
+
+        # Run training in a thread to avoid blocking UI
+        self.status_label.configure(text="Training in progress...")
+        self.update_idletasks()
+
+        def run_training():
+            try:
+                training_path = os.path.join(os.path.dirname(__file__), 'training_data.json')
+                result = ingest_training_files(folder, training_path)
+
+                # Reload training data
+                self.training_data = load_training_data(training_path)
+
+                # Update UI on main thread
+                summary = (
+                    f"Training complete!\n\n"
+                    f"Files processed: {result['files_processed']}\n"
+                    f"Rows analyzed: {result['total_rows_analyzed']}\n"
+                    f"Known manufacturers: {len(result['known_manufacturers'])}\n"
+                    f"MFG normalizations: {len(result['mfg_normalization'])}"
+                )
+                self.after(0, lambda: messagebox.showinfo("Training Complete", summary))
+                self.after(0, lambda: self.status_label.configure(text="Training complete — ready for improved parsing"))
+
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Training Error", str(e)))
+                self.after(0, lambda: self.status_label.configure(text=f"Training error: {str(e)}"))
+
+        threading.Thread(target=run_training, daemon=True).start()
+
     # ───────────────────────────────────────────────────────
     #  FILE HANDLING
     # ───────────────────────────────────────────────────────
@@ -799,6 +863,9 @@ class WescoMROParser(ctk.CTk):
             self.current_file = path
             filename = os.path.basename(path)
 
+            # Map columns using smart detection
+            self.column_mapping = map_columns(self.df_input, self.training_data)
+
             self.import_label.configure(text=f"✓  {filename}")
             self.file_info_label.configure(
                 text=f"{len(self.df_input)} rows  •  {len(self.df_input.columns)} columns  •  "
@@ -875,7 +942,7 @@ class WescoMROParser(ctk.CTk):
         instruction = self._get_instruction()
         if instruction and self.df_input is not None:
             cols = list(self.df_input.columns)
-            parsed = parse_instruction(instruction, cols)
+            parsed = parse_instruction(instruction, cols, column_mapping=self.column_mapping)
             # Show interpretation in a prominent badge
             self.interp_label.configure(text=f"⚡ Interpreted as: {parsed.explanation}")
             self.interp_label.pack(padx=8, pady=4)
@@ -957,7 +1024,7 @@ The parser understands phrases like:
         try:
             instruction = self._get_instruction()
             cols = list(self.df_input.columns)
-            parsed = parse_instruction(instruction, cols)
+            parsed = parse_instruction(instruction, cols, column_mapping=self.column_mapping)
 
             # Auto-detect if needed
             pipeline = parsed.pipeline
@@ -977,6 +1044,7 @@ The parser understands phrases like:
                     mfg_col=parsed.target_mfg_col,
                     pn_col=parsed.target_pn_col,
                     add_sim=parsed.add_sim,
+                    column_mapping=self.column_mapping,
                 )
 
             elif pipeline == 'part_number':
@@ -999,7 +1067,7 @@ The parser understands phrases like:
                                ['MATERIAL', 'DESCRIPTION', 'PO TEXT', 'NOTES'])]
                 if not source_cols:
                     source_cols = cols[:3]
-                result = pipeline_mfg_pn(self.df_input, source_cols)
+                result = pipeline_mfg_pn(self.df_input, source_cols, column_mapping=self.column_mapping)
 
             self.after(0, lambda: self.progress_bar.set(0.7))
 

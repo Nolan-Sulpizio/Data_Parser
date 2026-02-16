@@ -84,13 +84,15 @@ SIM_PATTERN_MAP = {
 #  PARSER
 # ═══════════════════════════════════════════════════════════════
 
-def parse_instruction(text: str, available_columns: list[str] = None) -> ParsedInstruction:
+def parse_instruction(text: str, available_columns: list[str] = None,
+                      column_mapping: dict = None) -> ParsedInstruction:
     """
     Interpret a natural language instruction and return a structured config.
 
     Args:
         text: User's instruction string.
         available_columns: Column headers from the uploaded Excel file.
+        column_mapping: Optional column mapping from column_mapper.map_columns()
     """
     result = ParsedInstruction()
     t = text.strip()
@@ -155,12 +157,26 @@ def parse_instruction(text: str, available_columns: list[str] = None) -> ParsedI
 
     # Fallback: auto-detect common source columns
     if not result.source_columns and available_columns:
-        auto_sources = ['Material Description', 'Material PO Text', 'PO Text',
-                        'MATERIAL DESCRIPTION', 'DESCRIPTION', 'Notes',
-                        'INFORECTXT1', 'INFORECTXT2']
+        # If column_mapping available, use it for auto-detection
+        if column_mapping:
+            auto_sources = (column_mapping.get('source_description', []) +
+                           column_mapping.get('source_po_text', []) +
+                           column_mapping.get('source_notes', []))
+        else:
+            # Use hardcoded fallback list
+            auto_sources = ['Material Description', 'Material PO Text', 'PO Text',
+                           'MATERIAL DESCRIPTION', 'DESCRIPTION', 'Notes',
+                           'INFORECTXT1', 'INFORECTXT2']
+
         for col in available_columns:
-            if col.strip() in auto_sources or any(s.lower() in col.lower() for s in auto_sources):
-                result.source_columns.append(col)
+            if column_mapping:
+                # If we have a mapping, use the mapped columns directly
+                if col in auto_sources:
+                    result.source_columns.append(col)
+            else:
+                # Otherwise, use fuzzy matching
+                if col.strip() in auto_sources or any(s.lower() in col.lower() for s in auto_sources):
+                    result.source_columns.append(col)
 
     # ── 3) Detect target columns ──
     # Check for "into column A" / "in column B" patterns

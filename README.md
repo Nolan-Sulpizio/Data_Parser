@@ -7,7 +7,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)]()
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](CHANGELOG.md)
 [![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen.svg)]()
 
 [Features](#-features) •
@@ -108,8 +108,9 @@ This tool encapsulates proven parsing logic into a distributable desktop app wit
 
 - 🎨 Modern dark theme with Wesco corporate branding (#009639 green)
 - 🗃️ Local SQLite database for history and saved configs
-- 🔍 Smart column detection and pattern matching
-- 📋 Manufacturer abbreviation normalization (20+ common abbreviations)
+- 🔍 **Smart column detection** — Automatically maps any file format to semantic roles using fuzzy matching
+- 🎓 **Self-learning engine** — Train from completed files to expand MFG normalization and column recognition
+- 📋 **Dynamic manufacturer database** — 105+ known manufacturers (vs ~10 hardcoded) with continuous learning
 - 🚫 Distributor filtering (GRAYBAR, CED, REXEL, etc.)
 - ⚡ Fast processing — handles 10,000+ row files efficiently
 - 🔐 100% offline — no internet, no APIs, no telemetry
@@ -292,6 +293,45 @@ Next time, just load the config instead of retyping the instruction.
 
 ---
 
+## 🎓 Advanced: Training the Engine
+
+### What is Training?
+
+The parser includes a **self-learning engine** that can improve its accuracy by analyzing completed files. When you "train" the system, it learns:
+
+- **New MFG name variants** (e.g., `CUTLR-HMR` → `CUTLER-HAMMER`)
+- **Column name variations** (e.g., `Product Desc` is a description column)
+- **Part number patterns** to better identify valid PNs
+
+### How to Train
+
+1. Collect **completed** Excel files where MFG and PN columns are already filled in correctly
+2. In the app, click **🎓 Train from Files** (in the Advanced section)
+3. Select the folder containing your completed files
+4. The app will analyze the files and update its knowledge base
+
+### What Gets Learned
+
+```
+Training Complete!
+
+Files processed: 5
+Rows analyzed: 623
+Known manufacturers: 105 (was 10)
+MFG normalizations: 155 (was 11)
+```
+
+**Result:** The parser now recognizes 105 manufacturer names and 155 abbreviation variants — dramatically improving accuracy on future files.
+
+### Training Best Practices
+
+- **Quality over quantity:** Train on files you've manually reviewed and corrected
+- **Incremental updates:** You can train multiple times — new data merges with existing
+- **Share knowledge:** Training data is saved to `training_data.json` — can be shared with team
+- **Verify results:** After training, test on a sample file to confirm improvements
+
+---
+
 ## 🔧 Processing Pipelines
 
 The parser includes three specialized pipelines, each designed for a specific MRO data extraction task:
@@ -376,6 +416,18 @@ The parser includes three specialized pipelines, each designed for a specific MR
 │  │                    Engine Layer (engine/)                       │ │
 │  │                                                                │ │
 │  │  ┌────────────────────┐   ┌──────────────────────────────────┐ │ │
+│  │  │ column_mapper      │◄──│    training.py (NEW v2.1)        │ │ │
+│  │  │                    │   │                                  │ │ │
+│  │  │ Smart column       │   │ ┌──────────────────────────────┐ │ │ │
+│  │  │ detection ────────►│   │ │ Ingest completed files       │ │ │ │
+│  │  │                    │   │ │ Extract MFG normalization    │ │ │ │
+│  │  │ Maps any file      │   │ │ Learn column name variants   │ │ │ │
+│  │  │ format to roles    │   │ │ Build manufacturer database  │ │ │ │
+│  │  └──────┬─────────────┘   │ └──────────────────────────────┘ │ │ │
+│  │         │                 │  Output: training_data.json      │ │ │
+│  │         │                 └──────────────────────────────────┘ │ │
+│  │         ▼                                                       │ │
+│  │  ┌────────────────────┐   ┌──────────────────────────────────┐ │ │
 │  │  │ instruction_parser │   │         parser_core              │ │ │
 │  │  │                    │   │                                  │ │ │
 │  │  │ NL text ──────────►│   │  ┌────────────┐ ┌────────────┐  │ │ │
@@ -401,10 +453,13 @@ The parser includes three specialized pipelines, each designed for a specific MR
 Data_Parser/
 ├── app.py                          # Main GUI application (customtkinter)
 ├── engine/
-│   ├── __init__.py                 # Package init + version (v2.0.0)
+│   ├── __init__.py                 # Package init + version (v2.1.0)
 │   ├── parser_core.py              # Core parsing logic & pipelines
 │   ├── instruction_parser.py       # NL instruction → pipeline config
+│   ├── column_mapper.py            # ⭐ NEW: Smart column detection
+│   ├── training.py                 # ⭐ NEW: Training data ingestion
 │   └── history_db.py               # Local SQLite for history + configs
+├── training_data.json              # ⭐ NEW: Learned patterns & normalizations
 ├── docs/
 │   ├── MFG_PN_Parsing_Agent_Spec.md           # Pipeline 1 specification
 │   ├── MRO_Part_Number_Processing_Spec.md     # Pipeline 2 specification
@@ -463,6 +518,8 @@ Flagged rows are exported to a separate `*- QA Issues.xlsx` workbook for team re
 
 ## 📚 Manufacturer Normalization
 
+### Built-in Normalizations
+
 The parser includes a built-in normalization map that standardizes common MFG abbreviations found in Wesco MRO data:
 
 | Raw Value | Normalized To |
@@ -479,7 +536,27 @@ The parser includes a built-in normalization map that standardizes common MFG ab
 
 **Full map:** See [`engine/parser_core.py`](engine/parser_core.py) → `NORMALIZE_MFG` dictionary
 
-**To request a new normalization:** Open a [Normalization Request](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=normalization_request.md)
+### Learned Normalizations (v2.1+)
+
+When you use the **🎓 Train from Files** feature, the parser automatically expands this normalization map by analyzing completed files. The current training data includes:
+
+```
+Built-in normalizations:  11 entries
+Learned normalizations:   155 entries (from training)
+Known manufacturers:      105 unique names
+
+Total coverage: 166 MFG variants recognized
+```
+
+**Examples of learned patterns:**
+- `SHAWMUT` → `FERRAZ SHAWMUT`
+- `STATIC-O` → `STATIC O-RING`
+- `UNTED ELEC` → `UNITED ELECTRIC`
+- `MICR MTION` → `MICRO MOTION`
+
+**To add more normalizations:**
+1. ✅ **Recommended:** Use the **Train from Files** feature (automatic)
+2. **Alternative:** Open a [Normalization Request](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=normalization_request.md) (manual)
 
 ---
 
@@ -489,9 +566,11 @@ The parser includes a built-in normalization map that standardizes common MFG ab
 - [x] **v1.0** — Desktop GUI with import, preview, export
 - [x] **v1.0** — Processing history and saved configurations
 - [x] **v2.0** — Wesco branding and production-ready UI
-- [ ] **v2.1** — Batch processing (multiple files at once)
-- [ ] **v2.2** — Config export/import for team sharing (JSON format)
-- [ ] **v2.3** — Dark/Light theme toggle
+- [x] **v2.1** — Smart column detection with fuzzy matching
+- [x] **v2.1** — Self-learning engine (train from completed files)
+- [ ] **v2.2** — Batch processing (multiple files at once)
+- [ ] **v2.3** — Config export/import for team sharing (JSON format)
+- [ ] **v2.4** — Dark/Light theme toggle
 - [ ] **v3.0** — Custom normalization map editor in UI
 - [ ] **v3.1** — Network drive config sync for team-wide templates
 - [ ] **v3.2** — Excel macro integration (call parser from Excel VBA)

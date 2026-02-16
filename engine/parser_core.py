@@ -13,6 +13,15 @@ import re
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
+import os
+
+# Import training data loader
+try:
+    from .training import load_training_data
+except ImportError:
+    # Fallback if training module not available
+    def load_training_data(path=None):
+        return {'mfg_normalization': {}, 'known_manufacturers': []}
 
 # ═══════════════════════════════════════════════════════════════
 #  CONFIGURATION — externalize later to JSON for business users
@@ -29,6 +38,12 @@ NORMALIZE_MFG = {
     'SOUTHWRE': 'SOUTHWIRE', 'USG CORP': 'USG CORPORATION',
     'STATIC O RING': 'STATIC O-RING', 'SQUARE-D': 'SQUARE D',
 }
+
+# Load training data and merge with defaults
+_training_data_path = os.path.join(os.path.dirname(__file__), '..', 'training_data.json')
+_training = load_training_data(_training_data_path)
+NORMALIZE_MFG.update(_training.get('mfg_normalization', {}))
+KNOWN_MANUFACTURERS = set(_training.get('known_manufacturers', []))
 
 DISTRIBUTORS = {'GRAYBAR', 'CED', 'MC- MC', 'MC-MC', 'MCNAUGHTON-MCKAY', 'EISI'}
 DESCRIPTORS = {'LVL', 'CTRL', 'FIBRE OPTIC', 'EF-11', 'EF 2', 'EF1 1/2', 'EF 1 1/2', 'EF1/2'}
@@ -218,18 +233,37 @@ def build_sim(mfg: Optional[str], pn: Optional[str], pattern: str = 'space') -> 
 #  PIPELINE: MFG + PN EXTRACTION (Electrical spec)
 # ═══════════════════════════════════════════════════════════════
 
-def pipeline_mfg_pn(df: pd.DataFrame, source_cols: list[str],
+def pipeline_mfg_pn(df: pd.DataFrame, source_cols: Optional[list[str]] = None,
                      mfg_col: str = 'MFG', pn_col: str = 'PN',
-                     add_sim: bool = True) -> JobResult:
+                     add_sim: bool = True, column_mapping: Optional[dict] = None) -> JobResult:
     """
     Full MFG/PN extraction pipeline.
-    source_cols: list of column names to search for MFG and PN text.
+
+    Args:
+        df: Input DataFrame
+        source_cols: List of column names to search for MFG and PN text (optional if column_mapping provided)
+        mfg_col: Target column for MFG output
+        pn_col: Target column for PN output
+        add_sim: Whether to generate SIM column
+        column_mapping: Optional column mapping from column_mapper.map_columns()
     """
     result = JobResult(total_rows=len(df))
     df = df.copy()
 
-    # Mine known manufacturers across all source columns
-    known_mfgs = set()
+    # If column_mapping provided and source_cols not explicitly set, use mapping
+    if column_mapping and not source_cols:
+        source_cols = (column_mapping.get('source_description', []) +
+                       column_mapping.get('source_po_text', []) +
+                       column_mapping.get('source_notes', []))
+        mfg_col = column_mapping.get('mfg_output') or mfg_col
+        pn_col = column_mapping.get('pn_output') or pn_col
+
+    # Ensure we have source columns
+    if not source_cols:
+        source_cols = []
+
+    # Mine known manufacturers across all source columns, starting with training data
+    known_mfgs = set(KNOWN_MANUFACTURERS)
     for col in source_cols:
         if col in df.columns:
             for text in df[col].dropna().astype(str).str.upper().values:

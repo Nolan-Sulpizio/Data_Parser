@@ -10,6 +10,13 @@ These documents define the parsing algorithms and business rules:
 - **[MRO_Part_Number_Processing_Spec.md](MRO_Part_Number_Processing_Spec.md)** — Part number validation and cleaning rules
 - **[SIM_BOM_Automation_Spec.md](SIM_BOM_Automation_Spec.md)** — SIM (Standard Item Marker) generation
 
+## Engine Upgrade (v2.1)
+New capabilities added in version 2.1:
+
+- **Smart Column Detection** — Automatically maps any file format to semantic roles
+- **Self-Learning Engine** — Train from completed files to expand recognition
+- See [ENGINE_UPGRADE_COMPLETE.md](../ENGINE_UPGRADE_COMPLETE.md) for full implementation details
+
 ## User Guides
 
 - **[TESTING_GUIDE.md](TESTING_GUIDE.md)** — Complete testing reference for developers
