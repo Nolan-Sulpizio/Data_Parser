@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔧 Wesco MRO Data Parser
+#  Wesco MRO Data Parser
 
 **Intelligent Excel parsing for MRO data extraction — Built for the Global Accounts Team**
 
@@ -46,20 +46,20 @@
 
 Built specifically for Wesco International's Global Accounts Business Development Associates (BDAs), this tool eliminates the manual, repetitive process of rebuilding AI chat sessions for every new file — giving the team a one-click solution they can run on any Windows machine.
 
-### 🔒 **100% Offline. No API Keys. No Internet Required.**
+###  **100% Offline. No API Keys. No Internet Required.**
 
 All processing happens locally on your machine. No data leaves your computer.
 
 ---
 
-## 🎯 The Problem
+##  The Problem
 
 Global Accounts BDAs receive large Excel files containing thousands of line items with messy, unstructured product descriptions. Extracting clean MFG, PN, and SIM values manually is:
 
-- ⏱️ **Time-intensive** — Hours per file
-- ⚠️ **Error-prone** — Inconsistent formatting, abbreviations, distributors mistaken for manufacturers
-- 🔄 **Repetitive** — Same logic rebuilt in Copilot for every new file
-- 😤 **Frustrating** — Context gets lost, accuracy degrades with large files
+-  **Time-intensive** — Hours per file
+-  **Error-prone** — Inconsistent formatting, abbreviations, distributors mistaken for manufacturers
+-  **Repetitive** — Same logic rebuilt in Copilot for every new file
+-  **Frustrating** — Context gets lost, accuracy degrades with large files
 
 ### Before This Tool
 ```
@@ -77,7 +77,7 @@ Import Excel → Click template → Export clean data
 
 ---
 
-## ✨ The Solution
+##  The Solution
 
 This tool encapsulates proven parsing logic into a distributable desktop app with a modern GUI. Team members:
 
@@ -89,7 +89,7 @@ This tool encapsulates proven parsing logic into a distributable desktop app wit
 
 ---
 
-## 🚀 Features
+##  Features
 
 ### Core Capabilities
 
@@ -116,7 +116,7 @@ This tool encapsulates proven parsing logic into a distributable desktop app wit
 
 ---
 
-## 🎬 Demo
+##  Demo
 
 ### Main Interface
 The app provides a clean, intuitive interface with three main sections:
@@ -532,12 +532,11 @@ This software is developed for internal use by Wesco International employees and
 
 For questions, support, or feedback:
 - Microsoft Teams: @Nolan Sulpizio
-- Slack: Global Accounts channel
 - GitHub Issues: [Create an issue](https://github.com/Nolan-Sulpizio/Data_Parser/issues)
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with:
 - [customtkinter](https://github.com/TomSchimansky/CustomTkinter) by Tom Schimansky
@@ -550,8 +549,7 @@ Parsing logic derived from specifications authored by the Global Accounts team a
 
 <div align="center">
 
-**⭐ If this tool saves you time, give it a star!**
 
-Built with ❤️ for the Wesco Global Accounts Team
+Built wfor the Wesco Global Accounts Team
 
 </div>
