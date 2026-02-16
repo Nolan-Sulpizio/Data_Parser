@@ -38,6 +38,9 @@ jobs:
         python -c "import engine.parser_core; import engine.instruction_parser; import engine.history_db; print('All imports successful')"
 
     - name: Check for common issues
+      shell: cmd
       run: |
-        echo "Checking for TODO/FIXME comments..."
-        findstr /S /I "TODO FIXME XXX HACK" *.py engine\*.py 2>nul || echo "No issues found"
+        echo Checking for TODO/FIXME comments...
+        findstr /S /I "TODO FIXME XXX HACK" *.py engine\*.py 2>nul
+        if errorlevel 1 echo No issues found
+        exit /b 0
