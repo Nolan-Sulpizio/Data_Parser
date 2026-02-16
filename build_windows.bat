@@ -23,7 +23,17 @@ pyinstaller ^
     --add-data "engine;engine" ^
     --hidden-import customtkinter ^
     --hidden-import openpyxl ^
+    --hidden-import openpyxl.cell ^
+    --hidden-import openpyxl.cell._writer ^
+    --hidden-import openpyxl.styles ^
+    --hidden-import openpyxl.styles.stylesheet ^
+    --hidden-import openpyxl.worksheet ^
+    --hidden-import openpyxl.worksheet._writer ^
+    --hidden-import openpyxl.xml.functions ^
+    --hidden-import openpyxl.utils ^
+    --hidden-import et_xmlfile ^
     --collect-all customtkinter ^
+    --collect-all openpyxl ^
     app.py
 
 REM Step 3: Done
