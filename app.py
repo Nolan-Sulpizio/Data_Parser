@@ -161,7 +161,7 @@ class WescoMROParser(ctk.CTk):
             btn.pack(fill='x', padx=16, pady=2)
 
         # Version footer
-        version_label = ctk.CTkLabel(self.sidebar, text="v2.0.0  •  Wesco International  •  Global Accounts",
+        version_label = ctk.CTkLabel(self.sidebar, text="v2.0.3  •  Wesco International  •  Global Accounts",
                                       font=(BRAND['font_family'], 9),
                                       text_color=BRAND['text_muted'])
         version_label.pack(side='bottom', pady=12)
