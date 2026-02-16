@@ -4,11 +4,18 @@
 
 **Intelligent Excel parsing for MRO data extraction — Built for the Global Accounts Team**
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)]()
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)]()
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-009639?logo=semanticrelease&logoColor=white)](CHANGELOG.md)
 [![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen.svg)]()
+
+[![Made with CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter-1f77b4?logo=python&logoColor=white)](https://github.com/TomSchimansky/CustomTkinter)
+[![Powered by Pandas](https://img.shields.io/badge/data-Pandas-150458?logo=pandas&logoColor=white)](https://pandas.pydata.org/)
+[![Built for Wesco](https://img.shields.io/badge/built_for-Wesco_International-009639?logo=enterprise&logoColor=white)]()
+[![Team](https://img.shields.io/badge/team-Global_Accounts-blue?logo=microsoft-teams&logoColor=white)]()
+[![Code Quality](https://img.shields.io/badge/code_quality-production-brightgreen?logo=github-actions&logoColor=white)]()
+[![Security](https://img.shields.io/badge/security-100%25_offline-success?logo=shield&logoColor=white)](SECURITY.md)
 
 [Features](#-features) •
 [Quick Start](#-quick-start) •
