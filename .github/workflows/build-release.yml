@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'  # Triggers on version tags like v2.0.0, v2.1.0, etc.
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     name: Build Windows Executable
