@@ -97,56 +97,53 @@ class WescoMROParser(ctk.CTk):
         self.sidebar.pack(side='left', fill='y')
         self.sidebar.pack_propagate(False)
 
-        # Logo area
+        # Logo area - pack FIRST for visibility
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color='transparent')
-        logo_frame.pack(fill='x', padx=20, pady=(24, 8))
+        logo_frame.pack(fill='x', padx=20, pady=(24, 16))
 
         # Try to load the Wesco logo image
+        logo_loaded = False
         try:
             logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'wesco_logo.png')
             if os.path.exists(logo_path):
                 # Load and resize the logo
                 logo_img = Image.open(logo_path)
-                # Calculate aspect ratio and resize to fit width ~200px
+                # Make it larger for better visibility
                 aspect_ratio = logo_img.height / logo_img.width
-                new_width = 180
+                new_width = 200
                 new_height = int(new_width * aspect_ratio)
                 logo_img = logo_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
                 # Convert to CTkImage
                 logo_ctk = ctk.CTkImage(light_image=logo_img, dark_image=logo_img,
                                        size=(new_width, new_height))
-                logo_label = ctk.CTkLabel(logo_frame, image=logo_ctk, text="")
+                logo_label = ctk.CTkLabel(logo_frame, image=logo_ctk, text="", fg_color='transparent')
                 logo_label.image = logo_ctk  # Keep a reference
-                logo_label.pack()
-            else:
-                # Fallback to text logo if image not found
-                logo_icon = ctk.CTkLabel(logo_frame, text="W",
-                                          font=(BRAND['font_family'], 32, 'bold'),
-                                          text_color=BRAND['accent'])
-                logo_icon.pack(side='left')
-
-                logo_text = ctk.CTkLabel(logo_frame, text="WESCO",
-                                          font=(BRAND['font_family'], 18, 'bold'),
-                                          text_color=BRAND['text_primary'])
-                logo_text.pack(side='left', padx=(8, 0))
+                logo_label.pack(pady=(0, 8))
+                logo_loaded = True
         except Exception as e:
-            # Fallback to text logo on any error
             print(f"Logo load error: {e}")
-            logo_icon = ctk.CTkLabel(logo_frame, text="W",
-                                      font=(BRAND['font_family'], 32, 'bold'),
-                                      text_color=BRAND['accent'])
-            logo_icon.pack(side='left')
+            logo_loaded = False
 
-            logo_text = ctk.CTkLabel(logo_frame, text="WESCO",
-                                      font=(BRAND['font_family'], 18, 'bold'),
+        # Always show text fallback if image didn't load
+        if not logo_loaded:
+            text_frame = ctk.CTkFrame(logo_frame, fg_color='transparent')
+            text_frame.pack()
+
+            logo_icon = ctk.CTkLabel(text_frame, text="W",
+                                      font=(BRAND['font_family'], 36, 'bold'),
+                                      text_color=BRAND['accent'])
+            logo_icon.pack(side='left', padx=(0, 4))
+
+            logo_text = ctk.CTkLabel(text_frame, text="WESCO",
+                                      font=(BRAND['font_family'], 20, 'bold'),
                                       text_color=BRAND['text_primary'])
-            logo_text.pack(side='left', padx=(8, 0))
+            logo_text.pack(side='left')
 
         subtitle = ctk.CTkLabel(self.sidebar, text="MRO Data Parser",
-                                 font=(BRAND['font_family'], 11),
+                                 font=(BRAND['font_family'], 12),
                                  text_color=BRAND['text_muted'])
-        subtitle.pack(anchor='w', padx=20, pady=(0, 20))
+        subtitle.pack(padx=20, pady=(0, 20))
 
         # Divider
         ctk.CTkFrame(self.sidebar, height=1, fg_color=BRAND['border']).pack(fill='x', padx=16)
@@ -244,27 +241,11 @@ class WescoMROParser(ctk.CTk):
             ],
         }
 
-        # Advanced Tools section
-        ctk.CTkFrame(self.sidebar, height=1, fg_color=BRAND['border']).pack(fill='x', padx=16, pady=(12, 0))
-
-        advanced_label = ctk.CTkLabel(self.sidebar, text="ADVANCED",
-                                       font=(BRAND['font_family'], 10, 'bold'),
-                                       text_color=BRAND['text_muted'])
-        advanced_label.pack(anchor='w', padx=20, pady=(16, 8))
-
-        train_btn = ctk.CTkButton(
-            self.sidebar, text="🎓  Train from Files", anchor='w',
-            font=(BRAND['font_family'], 11),
-            fg_color='transparent',
-            hover_color=BRAND['bg_hover'],
-            text_color=BRAND['text_secondary'],
-            height=32, corner_radius=6,
-            command=self._train_from_files,
-        )
-        train_btn.pack(fill='x', padx=16, pady=2)
+        # Spacer to push version footer to bottom
+        ctk.CTkFrame(self.sidebar, fg_color='transparent').pack(fill='both', expand=True)
 
         # Version footer
-        version_label = ctk.CTkLabel(self.sidebar, text="v2.1.0  •  Wesco International  •  Global Accounts",
+        version_label = ctk.CTkLabel(self.sidebar, text="v2.1.2  •  Wesco International  •  Global Accounts",
                                       font=(BRAND['font_family'], 9),
                                       text_color=BRAND['text_muted'])
         version_label.pack(side='bottom', pady=12)
@@ -287,29 +268,39 @@ class WescoMROParser(ctk.CTk):
             for widget in self.help_panel.winfo_children():
                 widget.destroy()
 
+            # Create a scrollable frame for the help content
+            help_scroll = ctk.CTkScrollableFrame(
+                self.help_panel,
+                fg_color='transparent',
+                height=300
+            )
+            help_scroll.pack(fill='both', expand=True, padx=8, pady=8)
+
             # Add help sections
             for section_title, tips in self.help_sections.items():
                 section_label = ctk.CTkLabel(
-                    self.help_panel, text=section_title,
-                    font=(BRAND['font_family'], 10, 'bold'),
-                    text_color=BRAND['text_primary'],
-                    anchor='w'
+                    help_scroll, text=section_title,
+                    font=(BRAND['font_family'], 11, 'bold'),
+                    text_color=BRAND['accent'],
+                    anchor='w',
+                    justify='left'
                 )
-                section_label.pack(anchor='w', padx=12, pady=(8, 2))
+                section_label.pack(anchor='w', padx=8, pady=(8, 4), fill='x')
 
                 for tip in tips:
                     tip_label = ctk.CTkLabel(
-                        self.help_panel, text=tip,
-                        font=(BRAND['font_family'], 9),
-                        text_color=BRAND['text_muted'],
-                        anchor='w', wraplength=220
+                        help_scroll, text=tip,
+                        font=(BRAND['font_family'], 10),
+                        text_color=BRAND['text_secondary'],
+                        anchor='w',
+                        justify='left',
+                        wraplength=200
                     )
-                    tip_label.pack(anchor='w', padx=12, pady=1)
+                    tip_label.pack(anchor='w', padx=8, pady=2, fill='x')
 
-            # Add bottom padding
-            ctk.CTkLabel(self.help_panel, text="", height=4).pack()
-
-            self.help_panel.pack(fill='x', padx=16, pady=(0, 8))
+            # Pack the help panel with explicit size
+            self.help_panel.pack(fill='both', padx=16, pady=(4, 8))
+            self.help_panel.configure(height=320)  # Set explicit height
         else:
             self.help_toggle_btn.configure(text="📖  How to Use  ▼")
             self.help_panel.pack_forget()
@@ -951,15 +942,17 @@ class WescoMROParser(ctk.CTk):
             self.interp_badge.pack_forget()
 
     def _rotate_placeholder(self):
-        """Cycle through example placeholders."""
+        """Cycle through example placeholders and show in a popup."""
         self.current_placeholder_idx = (self.current_placeholder_idx + 1) % len(self.placeholder_examples)
         example = self.placeholder_examples[self.current_placeholder_idx]
 
-        # Update placeholder if field is empty or has placeholder text
-        current = self.instruction_input.get('1.0', 'end').strip()
-        if not current or current.startswith('e.g.,'):
-            self.instruction_input.delete('1.0', 'end')
-            self.instruction_input.insert('1.0', f"e.g., {example}")
+        # Always replace the instruction field with the new example
+        self.instruction_input.delete('1.0', 'end')
+        self.instruction_input.insert('1.0', example)
+        self.instruction_input.focus()
+
+        # Update interpretation immediately
+        self._update_interpretation()
 
     def _show_instruction_help(self):
         """Show a help dialog about writing good instructions."""
