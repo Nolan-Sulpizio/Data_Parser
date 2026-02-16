@@ -11,6 +11,7 @@ Built by Nolan Sulpizio
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from PIL import Image, ImageTk
 import pandas as pd
 import os
 import sys
@@ -92,15 +93,47 @@ class WescoMROParser(ctk.CTk):
         logo_frame = ctk.CTkFrame(self.sidebar, fg_color='transparent')
         logo_frame.pack(fill='x', padx=20, pady=(24, 8))
 
-        logo_icon = ctk.CTkLabel(logo_frame, text="W",
-                                  font=(BRAND['font_family'], 32, 'bold'),
-                                  text_color=BRAND['accent'])
-        logo_icon.pack(side='left')
+        # Try to load the Wesco logo image
+        try:
+            logo_path = os.path.join(os.path.dirname(__file__), 'assets', 'wesco_logo.png')
+            if os.path.exists(logo_path):
+                # Load and resize the logo
+                logo_img = Image.open(logo_path)
+                # Calculate aspect ratio and resize to fit width ~200px
+                aspect_ratio = logo_img.height / logo_img.width
+                new_width = 180
+                new_height = int(new_width * aspect_ratio)
+                logo_img = logo_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
-        logo_text = ctk.CTkLabel(logo_frame, text="WESCO",
-                                  font=(BRAND['font_family'], 18, 'bold'),
-                                  text_color=BRAND['text_primary'])
-        logo_text.pack(side='left', padx=(8, 0))
+                # Convert to CTkImage
+                logo_ctk = ctk.CTkImage(light_image=logo_img, dark_image=logo_img,
+                                       size=(new_width, new_height))
+                logo_label = ctk.CTkLabel(logo_frame, image=logo_ctk, text="")
+                logo_label.image = logo_ctk  # Keep a reference
+                logo_label.pack()
+            else:
+                # Fallback to text logo if image not found
+                logo_icon = ctk.CTkLabel(logo_frame, text="W",
+                                          font=(BRAND['font_family'], 32, 'bold'),
+                                          text_color=BRAND['accent'])
+                logo_icon.pack(side='left')
+
+                logo_text = ctk.CTkLabel(logo_frame, text="WESCO",
+                                          font=(BRAND['font_family'], 18, 'bold'),
+                                          text_color=BRAND['text_primary'])
+                logo_text.pack(side='left', padx=(8, 0))
+        except Exception as e:
+            # Fallback to text logo on any error
+            print(f"Logo load error: {e}")
+            logo_icon = ctk.CTkLabel(logo_frame, text="W",
+                                      font=(BRAND['font_family'], 32, 'bold'),
+                                      text_color=BRAND['accent'])
+            logo_icon.pack(side='left')
+
+            logo_text = ctk.CTkLabel(logo_frame, text="WESCO",
+                                      font=(BRAND['font_family'], 18, 'bold'),
+                                      text_color=BRAND['text_primary'])
+            logo_text.pack(side='left', padx=(8, 0))
 
         subtitle = ctk.CTkLabel(self.sidebar, text="MRO Data Parser",
                                  font=(BRAND['font_family'], 11),
@@ -160,6 +193,49 @@ class WescoMROParser(ctk.CTk):
             )
             btn.pack(fill='x', padx=16, pady=2)
 
+        # How to Use section (expandable)
+        ctk.CTkFrame(self.sidebar, height=1, fg_color=BRAND['border']).pack(fill='x', padx=16, pady=(12, 0))
+
+        self.help_expanded = False
+        self.help_toggle_btn = ctk.CTkButton(
+            self.sidebar, text="📖  How to Use  ▼", anchor='w',
+            font=(BRAND['font_family'], 11, 'bold'),
+            fg_color='transparent',
+            hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_secondary'],
+            height=36, corner_radius=6,
+            command=self._toggle_help_panel,
+        )
+        self.help_toggle_btn.pack(fill='x', padx=16, pady=(12, 4))
+
+        # Help content (initially hidden)
+        self.help_panel = ctk.CTkFrame(self.sidebar, fg_color=BRAND['bg_input'], corner_radius=8)
+        self.help_sections = {
+            "✍️ Writing Instructions": [
+                "• Be specific: 'Extract MFG from column A into column B'",
+                "• Mention source and destination columns",
+                "• Use column names or letters (A, B, C, etc.)",
+            ],
+            "📊 Preparing Your Data": [
+                "• Add EMPTY columns next to your source data",
+                "• Empty columns should be to the RIGHT",
+                "• One empty column per output (MFG, PN, etc.)",
+                "• Keep source data intact",
+            ],
+            "💡 Tips & Best Practices": [
+                "• Name empty columns clearly (MFG, PN, SIM)",
+                "• Use Quick Templates for common tasks",
+                "• Check the 'Interpreted as' feedback",
+                "• Review Output preview before exporting",
+            ],
+            "⚠️ Common Mistakes": [
+                "• No empty columns for results",
+                "• Overwriting source data columns",
+                "• Vague instructions like 'extract data'",
+                "• Not specifying which columns to use",
+            ],
+        }
+
         # Version footer
         version_label = ctk.CTkLabel(self.sidebar, text="v2.0.6  •  Wesco International  •  Global Accounts",
                                       font=(BRAND['font_family'], 9),
@@ -172,6 +248,44 @@ class WescoMROParser(ctk.CTk):
                 btn.configure(fg_color=BRAND['bg_hover'], text_color=BRAND['accent'])
             else:
                 btn.configure(fg_color='transparent', text_color=BRAND['text_secondary'])
+
+    def _toggle_help_panel(self):
+        """Toggle the expandable help panel in sidebar."""
+        self.help_expanded = not self.help_expanded
+
+        if self.help_expanded:
+            self.help_toggle_btn.configure(text="📖  How to Use  ▲")
+
+            # Clear existing content
+            for widget in self.help_panel.winfo_children():
+                widget.destroy()
+
+            # Add help sections
+            for section_title, tips in self.help_sections.items():
+                section_label = ctk.CTkLabel(
+                    self.help_panel, text=section_title,
+                    font=(BRAND['font_family'], 10, 'bold'),
+                    text_color=BRAND['text_primary'],
+                    anchor='w'
+                )
+                section_label.pack(anchor='w', padx=12, pady=(8, 2))
+
+                for tip in tips:
+                    tip_label = ctk.CTkLabel(
+                        self.help_panel, text=tip,
+                        font=(BRAND['font_family'], 9),
+                        text_color=BRAND['text_muted'],
+                        anchor='w', wraplength=220
+                    )
+                    tip_label.pack(anchor='w', padx=12, pady=1)
+
+            # Add bottom padding
+            ctk.CTkLabel(self.help_panel, text="", height=4).pack()
+
+            self.help_panel.pack(fill='x', padx=16, pady=(0, 8))
+        else:
+            self.help_toggle_btn.configure(text="📖  How to Use  ▼")
+            self.help_panel.pack_forget()
 
     # ───────────────────────────────────────────────────────
     #  MAIN CONTENT AREA
@@ -252,6 +366,11 @@ class WescoMROParser(ctk.CTk):
         except Exception:
             pass  # DnD not available, click-to-browse still works
 
+        # ── Data prep tips (shows after file load) ──
+        self.data_tips_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'],
+                                             corner_radius=12, height=90)
+        # Initially hidden - will be shown after file load
+
         # ── Instruction input ──
         instr_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
         instr_frame.pack(fill='x', pady=(0, 12))
@@ -263,6 +382,18 @@ class WescoMROParser(ctk.CTk):
                       font=(BRAND['font_family'], 14, 'bold'),
                       text_color=BRAND['text_primary']).pack(side='left')
 
+        # Help tooltip button
+        help_btn = ctk.CTkButton(
+            instr_header, text="?", width=24, height=24,
+            font=(BRAND['font_family'], 11, 'bold'),
+            fg_color=BRAND['bg_input'],
+            hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_muted'],
+            corner_radius=12,
+            command=self._show_instruction_help,
+        )
+        help_btn.pack(side='right')
+
         self.instruction_input = ctk.CTkTextbox(
             instr_frame, height=60,
             font=(BRAND['font_family'], 12),
@@ -272,15 +403,52 @@ class WescoMROParser(ctk.CTk):
             border_width=1, corner_radius=8,
         )
         self.instruction_input.pack(fill='x', padx=16, pady=(0, 4))
-        self.instruction_input.insert('1.0',
-            'Describe what you need, e.g. "Extract MFG and PN from Material Description into columns A and B"')
-        self.instruction_input.bind('<FocusIn>', self._clear_placeholder)
 
-        # Interpretation feedback
-        self.interp_label = ctk.CTkLabel(instr_frame, text="",
+        # Set initial placeholder with rotating examples
+        self.placeholder_examples = [
+            "Extract MFG and PN from Material Description into columns A and B",
+            "Pull part number from Description column and put in PartNum column",
+            "Get manufacturer from Product Info and place in MFG column",
+            "Parse MFG, PN, and Description from Material text into separate columns",
+        ]
+        self.current_placeholder_idx = 0
+        self.instruction_input.insert('1.0', f"e.g., {self.placeholder_examples[0]}")
+        self.instruction_input.bind('<FocusIn>', self._clear_placeholder)
+        self.instruction_input.bind('<KeyRelease>', lambda e: self._update_interpretation())
+
+        # Interpretation feedback (now more prominent with badge style)
+        interp_container = ctk.CTkFrame(instr_frame, fg_color='transparent')
+        interp_container.pack(fill='x', padx=16, pady=(4, 0))
+
+        self.interp_badge = ctk.CTkFrame(interp_container, fg_color=BRAND['bg_input'],
+                                          corner_radius=6)
+        self.interp_label = ctk.CTkLabel(self.interp_badge, text="",
                                           font=(BRAND['font_family'], 10),
-                                          text_color=BRAND['text_muted'])
-        self.interp_label.pack(anchor='w', padx=16, pady=(0, 8))
+                                          text_color=BRAND['text_secondary'])
+
+        # Suggestion chips
+        self.suggestion_frame = ctk.CTkFrame(instr_frame, fg_color='transparent')
+        self.suggestion_frame.pack(fill='x', padx=16, pady=(4, 8))
+
+        suggestions = [
+            ("Need help?", self._show_instruction_help),
+            ("See examples", self._rotate_placeholder),
+        ]
+
+        for text, cmd in suggestions:
+            chip = ctk.CTkButton(
+                self.suggestion_frame, text=text,
+                width=90, height=24,
+                font=(BRAND['font_family'], 9),
+                fg_color='transparent',
+                hover_color=BRAND['bg_hover'],
+                text_color=BRAND['text_muted'],
+                border_color=BRAND['border'],
+                border_width=1,
+                corner_radius=12,
+                command=cmd,
+            )
+            chip.pack(side='left', padx=(0, 6))
 
         # ── Action buttons ──
         action_frame = ctk.CTkFrame(view, fg_color='transparent')
@@ -552,6 +720,71 @@ class WescoMROParser(ctk.CTk):
         if path.lower().endswith(('.xlsx', '.xls', '.csv')):
             self._load_file(path)
 
+    def _show_data_tips(self):
+        """Display data validation tips after file load."""
+        if self.df_input is None:
+            return
+
+        # Clear existing tips
+        for widget in self.data_tips_frame.winfo_children():
+            widget.destroy()
+
+        # Analyze the data
+        empty_cols = [col for col in self.df_input.columns
+                      if self.df_input[col].isna().all() or
+                      (self.df_input[col].astype(str).str.strip() == '').all()]
+
+        has_empty_cols = len(empty_cols) > 0
+
+        # Build tips content
+        tips_inner = ctk.CTkFrame(self.data_tips_frame, fg_color='transparent')
+        tips_inner.pack(fill='both', padx=16, pady=12)
+
+        # Header
+        if has_empty_cols:
+            icon = "✓"
+            header_text = "Your file is ready!"
+            header_color = BRAND['success']
+        else:
+            icon = "ℹ️"
+            header_text = "Data Preparation Tips"
+            header_color = BRAND['info']
+
+        header = ctk.CTkLabel(
+            tips_inner, text=f"{icon}  {header_text}",
+            font=(BRAND['font_family'], 12, 'bold'),
+            text_color=header_color
+        )
+        header.pack(anchor='w')
+
+        # Tips list
+        tips_list = ctk.CTkFrame(tips_inner, fg_color='transparent')
+        tips_list.pack(fill='x', pady=(4, 0))
+
+        tips = []
+        if has_empty_cols:
+            tips.append(f"✓  Found {len(empty_cols)} empty column(s) ready to fill")
+            tips.append(f"💡  Columns: {', '.join(empty_cols[:3])}{'...' if len(empty_cols) > 3 else ''}")
+        else:
+            tips.append("⚠️  No empty columns detected")
+            tips.append("💡  Add empty columns next to your source data for results")
+            tips.append("💡  Empty columns should be to the RIGHT of source data")
+
+        tips.append("✍️  Write your instruction below to specify what to extract")
+
+        for tip in tips:
+            tip_label = ctk.CTkLabel(
+                tips_list, text=tip,
+                font=(BRAND['font_family'], 10),
+                text_color=BRAND['text_secondary'],
+                anchor='w'
+            )
+            tip_label.pack(anchor='w', pady=1)
+
+        # Show the tips frame
+        self.data_tips_frame.pack(fill='x', pady=(0, 12))
+        self.data_tips_frame.pack_propagate(False)
+
     def _load_file(self, path: str):
         try:
             self.status_label.configure(text="Loading file...")
@@ -576,6 +809,9 @@ class WescoMROParser(ctk.CTk):
             self._populate_table(self.df_input)
             self.status_label.configure(text=f"Loaded: {filename}")
             self.preview_toggle.set("Input")
+
+            # Show data preparation tips
+            self._show_data_tips()
 
             # Auto-interpret any existing instruction
             self._update_interpretation()
@@ -637,10 +873,52 @@ class WescoMROParser(ctk.CTk):
 
     def _update_interpretation(self):
         instruction = self._get_instruction()
-        if self.df_input is not None:
+        if instruction and self.df_input is not None:
             cols = list(self.df_input.columns)
             parsed = parse_instruction(instruction, cols)
-            self.interp_label.configure(text=f"⚡ {parsed.explanation}")
+            # Show interpretation in a prominent badge
+            self.interp_label.configure(text=f"⚡ Interpreted as: {parsed.explanation}")
+            self.interp_label.pack(padx=8, pady=4)
+            self.interp_badge.pack(side='left', pady=(0, 4))
+        else:
+            self.interp_badge.pack_forget()
+
+    def _rotate_placeholder(self):
+        """Cycle through example placeholders."""
+        self.current_placeholder_idx = (self.current_placeholder_idx + 1) % len(self.placeholder_examples)
+        example = self.placeholder_examples[self.current_placeholder_idx]
+
+        # Update placeholder if field is empty or has placeholder text
+        current = self.instruction_input.get('1.0', 'end').strip()
+        if not current or current.startswith('e.g.,'):
+            self.instruction_input.delete('1.0', 'end')
+            self.instruction_input.insert('1.0', f"e.g., {example}")
+
+    def _show_instruction_help(self):
+        """Show a help dialog about writing good instructions."""
+        help_text = """How to Write Good Instructions:
+
+✅ BE SPECIFIC
+"Extract MFG from column A into column B"
+NOT: "Get the manufacturer"
+
+✅ MENTION COLUMNS
+Use column names or letters (A, B, C, etc.)
+"Pull part number from 'Description' into column D"
+
+✅ INDICATE SOURCE AND DESTINATION
+"Parse Material Description: MFG → column C, PN → column D"
+
+✅ USE NATURAL LANGUAGE
+The parser understands phrases like:
+• "Extract MFG and PN from..."
+• "Get manufacturer from..."
+• "Build SIM values..."
+• "Clean part numbers in..."
+
+💡 TIP: Check the "Interpreted as" feedback below the input box!
+"""
+        messagebox.showinfo("Instruction Writing Guide", help_text)
 
     def _apply_template(self, instruction: str):
         self._show_parser()
