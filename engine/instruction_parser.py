@@ -47,9 +47,20 @@ PIPELINE_SIGNALS = {
 }
 
 COLUMN_PATTERNS = {
-    # Source columns
-    'material_description': [r'\bmaterial\s+desc', r'\bdescription\b', r'\bdesc\s+col'],
-    'material_po_text': [r'\bmaterial\s+po\s+text\b', r'\bpo\s+text\b'],
+    # Source columns - expanded synonyms for generic terms
+    'material_description': [
+        r'\bmaterial\s+desc',           # "material description"
+        r'\bdescription\s+col',         # "description column"
+        r'\bdesc\s+col',                # "desc column"
+        r'\bthe\s+description',         # "the description"
+        r'\bfrom\s+description\b',      # "from description"
+        r'\bdescription\b',             # "description" (fallback)
+    ],
+    'material_po_text': [
+        r'\bmaterial\s+po\s+text\b',
+        r'\bpo\s+text\b',
+        r'\bpo\s+col',                  # "PO column"
+    ],
     'notes': [r'\bnotes?\b', r'\binforec'],
     # Target columns
     'mfg': [r'\bmfg\b', r'\bmanufacturer\b', r'\bmaker\b', r'\bbrand\b', r'\boem\b'],
@@ -99,7 +110,21 @@ def parse_instruction(text: str, available_columns: list[str] = None) -> ParsedI
 
     best_pipeline = max(scores, key=scores.get) if max(scores.values()) > 0 else 'auto'
     result.pipeline = best_pipeline
-    result.confidence = min(max(scores.values()) / 3.0, 1.0)
+
+    # Calculate confidence with boost for source column references
+    base_confidence = min(max(scores.values()) / 3.0, 1.0)
+
+    # Boost confidence if we detect source column references (description, PO text, etc.)
+    source_col_patterns = COLUMN_PATTERNS.get('material_description', []) + \
+                         COLUMN_PATTERNS.get('material_po_text', []) + \
+                         COLUMN_PATTERNS.get('notes', [])
+    source_col_matches = sum(1 for p in source_col_patterns if re.search(p, t_lower))
+
+    if source_col_matches > 0:
+        # Boost confidence: if we detected both pipeline AND source column, treat as high confidence
+        result.confidence = min(base_confidence + 0.33, 1.0)
+    else:
+        result.confidence = base_confidence
 
     # ── 2) Detect source columns ──
     if available_columns:

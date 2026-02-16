@@ -41,3 +41,8 @@ wesco_mro_history.db
 
 # Archives
 *.zip
+
+# Test data and results (local only)
+test_data/
+test_results*/
+*.output

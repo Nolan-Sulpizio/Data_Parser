@@ -5,6 +5,18 @@ This is an existing desktop application (`mro-parser/`) that parses MRO Excel da
 
 **The app already works.** The parsing engine, instruction parser, history DB, and GUI are all functional. This task is to **rebrand, polish, and prepare for team distribution**.
 
+## Testing
+The project includes a comprehensive test suite in `tests/`:
+- `run_validation.py` — Full 6-phase validation suite (accuracy, QA, unit, scale, normalization, edge cases)
+- `test_quick.py` — Fast smoke tests for development
+- `run_tests.sh` — Quick test runner script
+
+Run tests: `./run_tests.sh` (quick) or `./run_tests.sh full` (complete validation)
+
+Test data location: `/Users/nolansulpizio/Desktop/Documents - Nolan's MacBook Pro/WESCO/Data Parse Agent/Data Context/`
+
+See `TEST_INSTRUCTIONS.md` for detailed testing documentation.
+
 ## Primary Objectives
 
 ### 1. REBRAND: Clean Plate → Wesco

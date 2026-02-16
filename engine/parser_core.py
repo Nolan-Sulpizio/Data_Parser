@@ -189,6 +189,16 @@ def is_valid_pn(x: str) -> bool:
     return bool(VALID_PN_RE.match(x))
 
 
+def pn_needs_review(x: str, max_length: int = 30) -> bool:
+    """
+    Flag part numbers that exceed max length for human review.
+    Long PNs (>30 chars) are often concatenated config codes that need QA.
+    """
+    if not isinstance(x, str):
+        return False
+    return len(x.strip()) > max_length
+
+
 def build_sim(mfg: Optional[str], pn: Optional[str], pattern: str = 'space') -> str:
     """
     Build a SIM value from MFG and PN.
@@ -382,6 +392,8 @@ QA_RULES = [
     ('PN_missing',        lambda r, mc: str(r.get('PN', r.get('Part Number 1', ''))).strip() in ('', 'nan', 'None'), 'PN is empty'),
     ('MFG_is_distributor', lambda r, mc: str(r.get(mc, '')).upper().strip() in DISTRIBUTORS, 'MFG is a distributor'),
     ('MFG_has_digits',    lambda r, mc: re.search(r"\d", str(r.get(mc, ''))) is not None, 'MFG contains digits'),
+    ('PN_too_long',       lambda r, mc: pn_needs_review(str(r.get('PN', r.get('Part Number 1', '')))), 'PN exceeds 30 chars - review for concatenated codes'),
+    ('MFG_equals_PN',     lambda r, mc: str(r.get(mc, '')).strip() != '' and str(r.get(mc, '')).strip() == str(r.get('PN', '')).strip(), 'MFG identical to PN'),
 ]
 
 def run_qa(df: pd.DataFrame, mfg_col: str = 'MFG') -> list[dict]:
