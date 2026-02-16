@@ -31,9 +31,13 @@ pyinstaller ^
     --hidden-import openpyxl.worksheet._writer ^
     --hidden-import openpyxl.xml.functions ^
     --hidden-import openpyxl.utils ^
+    --hidden-import openpyxl.writer.excel ^
     --hidden-import et_xmlfile ^
+    --hidden-import et_xmlfile.xmlfile ^
     --collect-all customtkinter ^
     --collect-all openpyxl ^
+    --collect-all et_xmlfile ^
+    --copy-metadata openpyxl ^
     app.py
 
 REM Step 3: Done

@@ -161,7 +161,7 @@ class WescoMROParser(ctk.CTk):
             btn.pack(fill='x', padx=16, pady=2)
 
         # Version footer
-        version_label = ctk.CTkLabel(self.sidebar, text="v2.0.4  •  Wesco International  •  Global Accounts",
+        version_label = ctk.CTkLabel(self.sidebar, text="v2.0.5  •  Wesco International  •  Global Accounts",
                                       font=(BRAND['font_family'], 9),
                                       text_color=BRAND['text_muted'])
         version_label.pack(side='bottom', pady=12)
@@ -815,29 +815,61 @@ class WescoMROParser(ctk.CTk):
         try:
             # Ensure proper file extension
             if path.lower().endswith('.csv'):
+                # User explicitly requested CSV
                 self.df_output.to_csv(path, index=False)
+                export_format = 'CSV'
             else:
-                # Force .xlsx extension if not present
+                # Try Excel export, fallback to CSV on failure
                 if not path.lower().endswith(('.xlsx', '.xls')):
                     path = path + '.xlsx'
-                self.df_output.to_excel(path, index=False, engine='openpyxl')
+
+                try:
+                    self.df_output.to_excel(path, index=False, engine='openpyxl')
+                    export_format = 'Excel'
+                except Exception as excel_error:
+                    # Excel export failed - automatically fallback to CSV
+                    csv_path = path.replace('.xlsx', '.csv').replace('.xls', '.csv')
+                    self.df_output.to_csv(csv_path, index=False)
+                    path = csv_path
+                    export_format = 'CSV (Excel export unavailable)'
+
+                    # Log the error for debugging
+                    print(f"Excel export failed: {excel_error}")
+                    print(f"Automatically saved as CSV: {csv_path}")
 
             # Also export QA report if there are issues
             if self.job_result and self.job_result.issues:
-                if path.lower().endswith('.csv'):
-                    qa_path = path.replace('.csv', ' - QA Issues.csv')
-                    pd.DataFrame(self.job_result.issues).to_csv(qa_path, index=False)
-                else:
-                    qa_path = path.replace('.xlsx', ' - QA Issues.xlsx')
-                    if not qa_path.endswith('.xlsx'):
-                        qa_path = qa_path + ' - QA Issues.xlsx'
-                    pd.DataFrame(self.job_result.issues).to_excel(qa_path, index=False, engine='openpyxl')
-                self.status_label.configure(text=f"✓ Exported: {os.path.basename(path)} + QA report")
+                try:
+                    if path.lower().endswith('.csv'):
+                        qa_path = path.replace('.csv', ' - QA Issues.csv')
+                        pd.DataFrame(self.job_result.issues).to_csv(qa_path, index=False)
+                    else:
+                        # Try Excel for QA report
+                        qa_path = path.replace('.xlsx', ' - QA Issues.xlsx')
+                        if not qa_path.endswith('.xlsx'):
+                            qa_path = qa_path + ' - QA Issues.xlsx'
+                        try:
+                            pd.DataFrame(self.job_result.issues).to_excel(qa_path, index=False, engine='openpyxl')
+                        except Exception:
+                            # Fallback QA report to CSV
+                            qa_path = qa_path.replace('.xlsx', '.csv')
+                            pd.DataFrame(self.job_result.issues).to_csv(qa_path, index=False)
+
+                    self.status_label.configure(text=f"✓ Exported ({export_format}): {os.path.basename(path)} + QA report")
+                except Exception as qa_error:
+                    # QA export failed - just show main file success
+                    print(f"QA report export failed: {qa_error}")
+                    self.status_label.configure(text=f"✓ Exported ({export_format}): {os.path.basename(path)}")
             else:
-                self.status_label.configure(text=f"✓ Exported: {os.path.basename(path)}")
+                self.status_label.configure(text=f"✓ Exported ({export_format}): {os.path.basename(path)}")
+
+            messagebox.showinfo("Export Successful",
+                f"File exported as {export_format}\n\nSaved to:\n{path}")
 
         except Exception as e:
-            messagebox.showerror("Export Error", str(e))
+            error_msg = f"Export failed: {str(e)}\n\nTry saving as CSV format instead."
+            messagebox.showerror("Export Error", error_msg)
+            print(f"Full export error: {e}")
 
     # ───────────────────────────────────────────────────────
     #  SAVE CONFIG
