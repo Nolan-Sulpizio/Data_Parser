@@ -1,0 +1,43 @@
+name: Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality:
+    name: Code Quality & Syntax Check
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile app.py
+        python -m py_compile engine/__init__.py
+        python -m py_compile engine/parser_core.py
+        python -m py_compile engine/instruction_parser.py
+        python -m py_compile engine/history_db.py
+
+    - name: Verify imports
+      run: |
+        python -c "import engine.parser_core; import engine.instruction_parser; import engine.history_db; print('✓ All imports successful')"
+
+    - name: Check for common issues
+      run: |
+        echo "Checking for TODO/FIXME comments..."
+        findstr /S /I "TODO FIXME XXX HACK" *.py engine\*.py || echo "No issues found"

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# PyInstaller
+*.spec
+
+# App data (local DB — not committed)
+*.db
+clean_plate_history.db
+wesco_mro_history.db
+
+# Test data (don't commit client Excel files)
+*.xlsx
+*.xls
+*.csv
+!docs/*.md
+
+# Archives
+*.zip

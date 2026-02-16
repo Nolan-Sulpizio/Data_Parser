@@ -1,0 +1,8 @@
+# Placeholder for macOS Icon
+# To generate a proper .icns file:
+# 1. Create a 1024x1024 PNG with a bold green "W" (Wesco green #009639) on dark background (#0D1117)
+# 2. Use iconutil (macOS) to convert to .icns:
+#    iconutil -c icns icon.iconset
+# 3. Replace this file with the actual icon.icns
+
+# For now, this placeholder allows the build script to reference the icon path

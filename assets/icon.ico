@@ -1,0 +1,7 @@
+# Placeholder for Windows Icon
+# To generate a proper .ico file:
+# 1. Create a 256x256 PNG with a bold green "W" (Wesco green #009639) on dark background (#0D1117)
+# 2. Use an online converter or tool like ImageMagick to convert PNG to .ico
+# 3. Replace this file with the actual icon.ico
+
+# For now, this placeholder allows the build script to reference the icon path
