@@ -30,6 +30,12 @@ except ImportError:
     profile_file = None
     STRATEGY_WEIGHTS = {}
 
+# Import schema classifier (v3.5.0 — column-structure-aware routing)
+try:
+    from .schema_classifier import classify_schema as _classify_schema
+except ImportError:
+    _classify_schema = None
+
 # ═══════════════════════════════════════════════════════════════
 #  CONFIGURATION — externalize later to JSON for business users
 # ═══════════════════════════════════════════════════════════════
@@ -301,6 +307,7 @@ class JobResult:
     sim_filled: int = 0
     issues: list = field(default_factory=list)
     file_profile: object = None              # FileProfile instance
+    schema_profile: object = None            # SchemaProfile instance (v3.5.0)
     low_confidence_items: list = field(default_factory=list)
     confidence_stats: dict = field(default_factory=dict)
 
@@ -1164,6 +1171,19 @@ def pipeline_mfg_pn(
         thresh = confidence_threshold if confidence_threshold is not None else 0.40
 
     result.file_profile = file_profile
+
+    # ── Step 1b: Schema classification — column-structure-aware routing (v3.5.0) ──
+    # Detects which schema pattern the file uses (SAP_STANDARD, SAP_SHORT_TEXT, etc.)
+    # and multiplicatively merges schema multipliers with content-archetype weights.
+    # Both layers must agree to produce a strong boost; disagreement dampens.
+    schema_profile = None
+    if _classify_schema is not None and column_mapping is not None:
+        schema_profile = _classify_schema(column_mapping, file_profile)
+        strategy_weights = schema_profile.strategy_weights
+        if confidence_threshold is None:
+            thresh = schema_profile.confidence_threshold
+
+    result.schema_profile = schema_profile
 
     # ── Step 2: Mine known manufacturers ──────────────────────────────────────
     known_mfgs = set(KNOWN_MANUFACTURERS)
