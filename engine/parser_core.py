@@ -202,8 +202,9 @@ BARE_SPEC_TOKENS = {
 
 # ── v3.1: Descriptor-pattern PN rejection (Fix 4) ────────────────────────────
 # Tokens matching NUMBER-DESCRIPTOR patterns are NOT part numbers
+# v3.4: Dash made optional so "2BOLT", "4BOLT" are also rejected (not just "2-BOLT")
 PN_DESCRIPTOR_PATTERNS = re.compile(
-    r'^\d+-(?:WAY|BOLT|POINT|HOLE|PIN|POLE|GANG|SLOT|SPEED|STAGE|STEP|'
+    r'^\d+-?(?:WAY|BOLT|POINT|HOLE|PIN|POLE|GANG|SLOT|SPEED|STAGE|STEP|'
     r'HOUR|PACK|PIECE|SET|PAIR|DI|DI/O|AI|AO|SPC|POS|PORT|WIRE|COND|BLADE)$',
     re.IGNORECASE,
 )
@@ -226,7 +227,10 @@ MFG_PREFIX_MAP = {
 
 # Part Number Processing (from MRO spec)
 VALID_PN_RE = re.compile(r'^[A-Z0-9]+(?:[\-/][A-Z0-9]+)*$')
-STRUCTURED_PN_RE = re.compile(r'\b([A-Z0-9]+(?:[\-/][A-Z0-9]+)+)\b')
+# v3.4: Added _ to separator class to catch revision codes like 37090310152_REV2, LEGR_3106
+STRUCTURED_PN_RE = re.compile(r'\b([A-Z0-9]+(?:[\-/_][A-Z0-9]+)+)\b')
+# v3.4: Dimension annotation pattern — rejects tokens like "W 2.6875IN", "ID 180MM"
+DIMENSION_ANNOTATION_RE = re.compile(r'^[A-Z]{1,2}\s+[\d]', re.IGNORECASE)
 INVALID_PN_PREFIXES = ('N0', 'N7', 'N71', 'N72', 'N73', 'CNVL', 'T7', 'T71', 'T72', 'T76', 'T77', 'T78', 'T79')
 
 # ═══════════════════════════════════════════════════════════════
@@ -245,6 +249,7 @@ CONFIDENCE_SCORES = {
     'pn_dash_catalog': 0.80,    # Dash-separated catalog number (McMaster format)
     'pn_trailing_catalog': 0.68,  # v3.2: Trailing code in DESC,DESC,CATALOG format (Fix 1)
     'pn_trailing_numeric': 0.50,  # v3.2: Trailing pure-numeric code ≥7 digits (Fix 5)
+    'pn_first_token_catalog': 0.68,  # v3.4: First token is catalog number (CATALOG, description)
 
     # MFG extraction sources
     'mfg_label': 0.95,          # MANUFACTURER: explicit label
@@ -415,6 +420,9 @@ def extract_pn_labeled(text: str) -> tuple:
     """
     Strategy: Labeled PN extraction (PN:, MN:, MODEL:, etc.)
     Returns (pn, 'label', confidence) or (None, 'none', 0.0).
+
+    v3.4: If the first word has no digits (e.g. "PNOZ" from "MN: PNOZ MI1P"), tries
+    collapsing spaces out of the full match to recover "PNOZMI1P", "MVE160/2M", etc.
     """
     if not text:
         return None, 'none', 0.0
@@ -422,7 +430,20 @@ def extract_pn_labeled(text: str) -> tuple:
     for pat in PN_LABEL_PATTERNS:
         m = re.search(pat, t)
         if m:
-            pn = _clean_pn_token(m.group(1))
+            raw = m.group(1).strip()
+            pn = _clean_pn_token(raw)
+            if pn and re.search(r'[0-9]', pn):
+                # Normal path: first word already has digits — use it as-is
+                return pn, 'label', CONFIDENCE_SCORES['pn_label']
+            # v3.4: first word has no digits (all-alpha prefix like "PNOZ", "MVE", "MRV")
+            # Try collapsing spaces from the full matched value: "PNOZ MI1P" → "PNOZMI1P"
+            collapsed_raw = re.sub(r'\s+', '', raw.split(',')[0].split(';')[0])
+            cm = re.match(r'^[A-Z0-9][A-Z0-9\-_/\.]*', collapsed_raw)
+            if cm:
+                cand = cm.group(0)
+                if re.search(r'[A-Z]', cand) and re.search(r'[0-9]', cand) and len(cand) >= 4:
+                    return cand, 'label', CONFIDENCE_SCORES['pn_label']
+            # Fall back to the original pn (may be all-alpha, will be caught by Rule 8)
             if pn:
                 return pn, 'label', CONFIDENCE_SCORES['pn_label']
     return None, 'none', 0.0
@@ -497,11 +518,13 @@ def extract_pn_dash_catalog(text: str) -> tuple:
     Strategy: Extract PN from 'CATALOG_NUMBER - Description' format. (Fix 5)
     Common in McMaster-Carr, ULINE, and other distributor catalog entries.
     Example: "6970T53 - Antislip Tape" → PN='6970T53'
+    v3.4: Also handles "CATALOG_NUMBER / Description" (space-slash-space) format.
+    Example: "7619K144 / LINE 2 WASHLINE" → PN='7619K144'
     Returns (pn, 'dash_catalog', confidence) or (None, 'none', 0.0).
     """
     if not text:
         return None, 'none', 0.0
-    m = re.match(r'^([A-Z0-9][A-Z0-9\-\.]*?)\s+-\s+', text.strip(), re.IGNORECASE)
+    m = re.match(r'^([A-Z0-9][A-Z0-9\-\.]*?)\s+[-/]\s+', text.strip(), re.IGNORECASE)
     if m:
         candidate = m.group(1).strip().upper()
         # Validate: must have both letters and digits, and a reasonable length
@@ -548,11 +571,19 @@ def extract_pn_trailing_catalog(text: str) -> tuple:
     if _is_spec_value(last) or _is_descriptor_pn(last):
         return None, 'none', 0.0
 
+    # v3.4: Reject dimension-annotation tokens like "W 2.6875IN", "ID 180MM"
+    if DIMENSION_ANNOTATION_RE.match(last):
+        return None, 'none', 0.0
+    # v3.4: Last token must contain only valid PN characters (no spaces, #, ", etc.)
+    if not re.match(r'^[A-Z0-9][A-Z0-9\-_/\.]+$', last):
+        return None, 'none', 0.0
+
     # Preceding tokens: majority should be alpha-only descriptors or spec values
+    # v3.4: Space-aware — "MOLD CASE", "CKT BRKR" count as descriptors (not just single words)
     preceding = tokens[:-1]
     descriptor_count = sum(
         1 for tok in preceding
-        if tok.isalpha() or _is_spec_value(tok) or tok in BARE_SPEC_TOKENS
+        if all(c.isalpha() or c == ' ' for c in tok) or _is_spec_value(tok) or tok in BARE_SPEC_TOKENS
     )
     if descriptor_count < len(preceding) / 2:
         return None, 'none', 0.0
@@ -584,10 +615,61 @@ def extract_pn_trailing_numeric(text: str) -> tuple:
         return None, 'none', 0.0
 
     last = tokens[-1]
-    if not (last.isdigit() and len(last) >= 7):
+    # Pure numeric ≥7 digits (original behaviour)
+    if last.isdigit() and len(last) >= 7:
+        return last, 'trailing_numeric', CONFIDENCE_SCORES['pn_trailing_numeric']
+    # v3.4: Numeric-dash codes like "17000120500-01" (all-digit groups joined by dashes)
+    if (re.match(r'^\d{6,}(?:[\-/]\d+)+$', last) and
+            last.replace('-', '').replace('/', '').isdigit()):
+        return last, 'trailing_numeric', CONFIDENCE_SCORES['pn_trailing_numeric']
+
+    return None, 'none', 0.0
+
+
+def extract_pn_first_token_catalog(text: str) -> tuple:
+    """
+    v3.4 — Extract PN when the first comma-separated token is a catalog number.
+
+    Targets distributor catalog format where the PN comes first:
+        '7950K146, 4 GAUGE WIRE'     → PN='7950K146'
+        'RA107RR, Timken, Cylindrical OD' → PN='RA107RR'
+        '3488K94,ELECTRIC MIXER,...' → PN='3488K94'
+
+    Validation gates:
+      - ≥ 2 comma-separated tokens
+      - First token is purely alphanumeric (no spaces, valid PN chars only)
+      - First token has both letters AND digits
+      - First token length 5-20 chars
+      - First token is NOT a spec value or descriptor pattern
+      - First token NOT in INVALID_PN_PREFIXES
+
+    Returns (pn, 'first_token_catalog', 0.68) or (None, 'none', 0.0).
+    """
+    if not text:
+        return None, 'none', 0.0
+    t = str(text).strip().upper()
+    tokens = [tok.strip() for tok in t.split(',')]
+    if len(tokens) < 2:
         return None, 'none', 0.0
 
-    return last, 'trailing_numeric', CONFIDENCE_SCORES['pn_trailing_numeric']
+    first = tokens[0]
+    # Must be valid PN characters only (no spaces, no special chars)
+    if not re.match(r'^[A-Z0-9][A-Z0-9\-/\.]+$', first):
+        return None, 'none', 0.0
+    # Must have both letters AND digits
+    if not (re.search(r'[A-Z]', first) and re.search(r'[0-9]', first)):
+        return None, 'none', 0.0
+    # Length gate: 5-20 chars
+    if not (5 <= len(first) <= 20):
+        return None, 'none', 0.0
+    # Not a spec value or descriptor pattern
+    if _is_spec_value(first) or _is_descriptor_pn(first):
+        return None, 'none', 0.0
+    # Not an invalid PN prefix
+    if any(first.startswith(p) for p in INVALID_PN_PREFIXES):
+        return None, 'none', 0.0
+
+    return first, 'first_token_catalog', CONFIDENCE_SCORES['pn_first_token_catalog']
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1138,6 +1220,11 @@ def pipeline_mfg_pn(
             if pn:
                 pn_candidates.append(ExtractionCandidate(pn, 'trailing_numeric', conf))
 
+            # v3.4: First-token catalog format (CATALOG_NUM, description)
+            pn, src, conf = extract_pn_first_token_catalog(t)
+            if pn:
+                pn_candidates.append(ExtractionCandidate(pn, 'first_token_catalog', conf))
+
         # Strategy: prefix decode (from first token)
         prefix_mfg, prefix_pn = decode_mfg_prefix(combined_text)
         if prefix_pn:
@@ -1147,8 +1234,9 @@ def pipeline_mfg_pn(
 
         # Strategy: pure catalog (entire first text blob IS the PN)
         # v3.2: require at least one digit — pure-alpha words like "PACKAGING" are not PNs
+        # v3.4: allow underscore so "37520423011_REV1" is caught as a catalog code
         first_text = texts[0].strip().upper() if texts else ''
-        if (re.match(r'^[A-Z0-9][A-Z0-9\-/\.]*$', first_text)
+        if (re.match(r'^[A-Z0-9][A-Z0-9\-/_\.]*$', first_text)
                 and len(first_text) < 25
                 and re.search(r'[0-9]', first_text)
                 and not _is_spec_value(first_text)):

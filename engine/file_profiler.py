@@ -39,18 +39,21 @@ STRATEGY_WEIGHTS = {
         'prefix_decode': 0.5, 'supplier_fallback': 0.3, 'heuristic': 0.6,
         'dash_catalog': 1.0,
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
+        'first_token_catalog': 1.0,  # v3.4
     },
     "COMPRESSED_SHORT": {
         'label': 1.0, 'known_mfg': 1.2, 'context': 0.8,
         'prefix_decode': 1.3, 'supplier_fallback': 1.2, 'heuristic': 0.4,
         'dash_catalog': 1.0,
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
+        'first_token_catalog': 1.0,  # v3.4
     },
     "CATALOG_ONLY": {
         'label': 0.8, 'known_mfg': 0.5, 'context': 0.3,
         'prefix_decode': 1.0, 'supplier_fallback': 1.5, 'heuristic': 0.3,
         'dash_catalog': 1.3,
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
+        'first_token_catalog': 1.1,  # v3.4 — slightly boosted in catalog-heavy files
     },
     "MIXED": {
         'label': 1.0, 'known_mfg': 1.0, 'context': 1.0,
@@ -62,6 +65,7 @@ STRATEGY_WEIGHTS = {
         'heuristic': 0.75,
         'dash_catalog': 1.0,
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
+        'first_token_catalog': 1.0,  # v3.4
     },
 }
 
