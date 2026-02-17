@@ -37,22 +37,31 @@ STRATEGY_WEIGHTS = {
     "LABELED_RICH": {
         'label': 1.2, 'known_mfg': 1.0, 'context': 1.0,
         'prefix_decode': 0.5, 'supplier_fallback': 0.3, 'heuristic': 0.6,
-        'dash_catalog': 1.0,   # Fix 5
+        'dash_catalog': 1.0,
+        'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
     },
     "COMPRESSED_SHORT": {
         'label': 1.0, 'known_mfg': 1.2, 'context': 0.8,
         'prefix_decode': 1.3, 'supplier_fallback': 1.2, 'heuristic': 0.4,
-        'dash_catalog': 1.0,   # Fix 5
+        'dash_catalog': 1.0,
+        'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
     },
     "CATALOG_ONLY": {
         'label': 0.8, 'known_mfg': 0.5, 'context': 0.3,
         'prefix_decode': 1.0, 'supplier_fallback': 1.5, 'heuristic': 0.3,
-        'dash_catalog': 1.3,   # Fix 5: boost for catalog-style files
+        'dash_catalog': 1.3,
+        'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
     },
     "MIXED": {
         'label': 1.0, 'known_mfg': 1.0, 'context': 1.0,
-        'prefix_decode': 1.0, 'supplier_fallback': 1.0, 'heuristic': 0.5,
-        'dash_catalog': 1.0,   # Fix 5
+        'prefix_decode': 1.0, 'supplier_fallback': 1.0,
+        # v3.2: raised from 0.5 → 0.75 — the 0.5 weight was too aggressive:
+        # max heuristic score (0.65) * 0.5 = 0.325, always below threshold (0.40),
+        # meaning the heuristic was effectively disabled in MIXED files.
+        # 0.65 * 0.75 = 0.49 now passes. 593 low-confidence items unlocked.
+        'heuristic': 0.75,
+        'dash_catalog': 1.0,
+        'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
     },
 }
 

@@ -68,6 +68,15 @@ NORMALIZE_MFG.update({
     # v3.2: Fix 3 — ENDRESS HAUSER partial-name normalization
     'HAUSER': 'ENDRESS HAUSER',
     'ENDRESS': 'ENDRESS HAUSER',
+    # v3.2: Discovery-loop normalization shortcuts found in WESCO data
+    'ALNBRDLY': 'ALLEN BRADLEY',
+    'SIEMNS': 'SIEMENS',
+    'MARTN': 'MARTIN',
+    'WSTNGHS': 'WESTINGHOUSE',
+    'ACME ELE': 'ACME ELECTRIC',
+    'BRUNO FOLCUERI': 'BRUNO FOLCIERI',   # typo variant
+    'PAAL BALER': 'PAAL',
+    'REGAL REXNORD': 'REGAL REXNORD',
 })
 
 KNOWN_MANUFACTURERS = set(_training.get('known_manufacturers', []))
@@ -80,6 +89,10 @@ KNOWN_MANUFACTURERS.update({
     'BALEMASTER', 'PILZ', 'FESTO',
     # v3.2: Fix 3 — add ENDRESS HAUSER so it never gets blocked
     'ENDRESS HAUSER',
+    # v3.2: Discovery-loop — legitimate rare manufacturers found in WESCO data
+    'TSUBAKI', 'IDEC', 'LENZE', 'TRAVAINI', 'MARATHON', 'ERIEZ', 'BALDOR',
+    'NORD', 'SMC', 'BONFIGLIOLI', 'REGAL REXNORD', 'HYDRAFORCE', 'DUPLOMATIC',
+    'WENGLOR', 'VORTEX', 'OMAL', 'ACME ELECTRIC', 'WESTINGHOUSE', 'PAAL',
 })
 
 DISTRIBUTORS = {
@@ -133,6 +146,20 @@ MFG_BLOCKLIST = {
     'H/W', 'HW', 'S/S', 'C/S',
     # Pipe/thread/material codes
     'FNPT', 'MNPT', 'BSP', 'SAE',
+    # v3.2: Discovery-loop false-positive single-word descriptors
+    'MOTOR', 'GEARBOX', 'COVER', 'ASSY', 'COMPLETE', 'SCREW', 'SOCKET',
+    'BOTTOM', 'DRUM', 'LINER', 'IDLER', 'RETURN', 'TAIL', 'TAILSHAFT',
+    'AUGER', 'GASKET', 'SELECTOR', 'SPARE', 'SPECIAL', 'MANUAL', 'CUSTOM',
+    'ROTARY', 'LOCKING', 'RETAINING', 'KEYLESS', 'GEARED', 'COMMS',
+    'INDUCTIVE', 'TUBULAR', 'GROUNDED', 'THREADED', 'DELAY', 'SPLIT',
+    'STARTING', 'CLEAR', 'FEMLE', 'OVERCENTER', 'HIGH', 'LOW',
+    'COUNTERSHAFT', 'ROTORE', 'ELECTRICAL', 'PANELMOUNT', 'PULLEY',
+    # v3.2: Discovery-loop multi-word false-positive descriptors
+    'EMERGENCY STOP', 'SQURL CAGE', 'SINGL PHASE', 'AC GEN PURP',
+    'MOTION CONTROL', 'HIGH LEVEL', 'PILLOW BLOCK', 'SPEED CTRL',
+    'OPTICAL KIT', 'FOR NRT',
+    'LEFT SIDE', 'RIGHT SIDE', 'REAR LEFT', 'REAR RIGHT',
+    'FRNT SHT', 'W/PACKING', 'HEAVY DUTY', 'EXTENDED REACH',
 }
 
 PN_LABEL_PATTERNS = [
@@ -963,6 +990,21 @@ def validate_and_clean(
             if pn_val in all_known_mfgs:
                 _clear(df, idx, pn_col, pn_val, 'pn_is_manufacturer')
 
+    # ── Rule 8: v3.2 — PN is all-alpha (no digits) → not a real part number ──
+    # Safety net for cases where pure-word text (PACKAGING, CALIPERS, etc.) slips through.
+    # Exception: labeled PNs like "PKZ" are valid model codes; we only reject when they're
+    # clearly natural-language words (all-alpha, no digits, length ≤ 10).
+    if has_pn:
+        for idx, row in df.iterrows():
+            pn_val = str(row.get(pn_col, '')).strip().upper()
+            if _is_blank(pn_val):
+                continue
+            if (pn_val.isalpha()
+                    and not re.search(r'[0-9]', pn_val)
+                    and len(pn_val) <= 12
+                    and pn_val not in KNOWN_MANUFACTURERS):
+                _clear(df, idx, pn_col, pn_val, 'pn_all_alpha_no_digits')
+
     return df, corrections
 
 
@@ -1104,9 +1146,11 @@ def pipeline_mfg_pn(
             ))
 
         # Strategy: pure catalog (entire first text blob IS the PN)
+        # v3.2: require at least one digit — pure-alpha words like "PACKAGING" are not PNs
         first_text = texts[0].strip().upper() if texts else ''
         if (re.match(r'^[A-Z0-9][A-Z0-9\-/\.]*$', first_text)
                 and len(first_text) < 25
+                and re.search(r'[0-9]', first_text)
                 and not _is_spec_value(first_text)):
             pn_candidates.append(ExtractionCandidate(
                 first_text, 'pn_catalog', CONFIDENCE_SCORES['pn_catalog']
