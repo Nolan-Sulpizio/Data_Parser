@@ -282,6 +282,92 @@ def validate_mapping(mapping: dict, strict: bool = False) -> tuple[bool, list[st
     return (len(issues) == 0, issues)
 
 
+def suggest_columns(df: pd.DataFrame, mapping: Optional[dict] = None) -> dict:
+    """
+    Analyze DataFrame columns and return UI-ready suggestions for the column selector.
+
+    Wraps map_columns() and adds content-based confidence scoring so the UI can
+    pre-select the most likely source columns and explain the reasoning.
+
+    Args:
+        df: The uploaded DataFrame
+        mapping: Optional pre-computed result from map_columns(); computed if not given
+
+    Returns:
+        {
+            'source_suggestions': [
+                {'column': str, 'letter': str, 'confidence': float, 'reason': str},
+                ...  # sorted by confidence descending
+            ],
+            'supplier_suggestion': {'column': str, 'letter': str, ...} | None,
+        }
+    """
+    if mapping is None:
+        mapping = map_columns(df)
+
+    suggestions: dict = {'source_suggestions': [], 'supplier_suggestion': None}
+    cols = list(df.columns)
+
+    # Aggregate all source column candidates across all source roles
+    all_source_cols = (
+        mapping.get('source_description', [])
+        + mapping.get('source_po_text', [])
+        + mapping.get('source_notes', [])
+    )
+
+    seen: set = set()
+    for col in all_source_cols:
+        if col in seen or col not in df.columns:
+            continue
+        seen.add(col)
+
+        idx = cols.index(col)
+        letter = chr(ord('A') + idx) if idx < 26 else f"Col{idx + 1}"
+
+        # Content-based confidence scoring
+        sample = df[col].dropna().head(20).astype(str)
+        if len(sample) > 0:
+            avg_len = sample.str.len().mean()
+            text_pct = sum(1 for v in sample if any(c.isalpha() for c in v)) / len(sample)
+        else:
+            avg_len = 0.0
+            text_pct = 0.0
+
+        confidence = 0.5
+        if text_pct > 0.8:
+            confidence += 0.30
+        if avg_len > 15:
+            confidence += 0.15
+        confidence = min(confidence, 0.99)
+
+        reason = f"{text_pct:.0%} text · avg {avg_len:.0f} chars"
+        suggestions['source_suggestions'].append({
+            'column': col,
+            'letter': letter,
+            'confidence': confidence,
+            'reason': reason,
+        })
+
+    # Sort by confidence descending so highest-confidence columns appear first
+    suggestions['source_suggestions'].sort(key=lambda x: x['confidence'], reverse=True)
+
+    # Supplier suggestion (first match only — used as MFG fallback)
+    sup_cols = mapping.get('source_supplier', [])
+    if sup_cols:
+        col = sup_cols[0]
+        if col in cols:
+            idx = cols.index(col)
+            letter = chr(ord('A') + idx) if idx < 26 else f"Col{idx + 1}"
+            suggestions['supplier_suggestion'] = {
+                'column': col,
+                'letter': letter,
+                'confidence': 0.80,
+                'reason': 'Header matches supplier/vendor pattern',
+            }
+
+    return suggestions
+
+
 def format_mapping_summary(mapping: dict) -> str:
     """
     Generate a human-readable summary of the column mapping.

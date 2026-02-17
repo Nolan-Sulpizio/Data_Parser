@@ -25,7 +25,7 @@ from engine.parser_core import (
     pipeline_mfg_pn, pipeline_part_number, pipeline_sim_builder, run_qa
 )
 from engine.instruction_parser import parse_instruction, auto_detect_pipeline
-from engine.column_mapper import map_columns, format_mapping_summary
+from engine.column_mapper import map_columns, format_mapping_summary, suggest_columns
 from engine.training import load_training_data, ingest_training_files
 from engine import history_db
 
@@ -78,6 +78,13 @@ class WescoMROParser(ctk.CTk):
         self.is_processing = False
         self.column_mapping: dict = None
         self.training_data: dict = None
+
+        # Column-first selector state
+        self.col_selector_vars: dict = {}       # {col_name: tk.BooleanVar}
+        self.output_position_var: tk.StringVar = None
+        self.supplier_col_var: tk.StringVar = None
+        self._col_suggestions: dict = {}
+        self._advanced_visible: bool = False
 
         # Load training data at startup
         training_path = os.path.join(os.path.dirname(__file__), 'training_data.json')
@@ -382,11 +389,28 @@ class WescoMROParser(ctk.CTk):
                                              corner_radius=12, height=90)
         # Initially hidden - will be shown after file load
 
-        # ── Instruction input ──
-        instr_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
-        instr_frame.pack(fill='x', pady=(0, 12))
+        # ── Column Selector (shown after file load, packed via _refresh_column_selector) ──
+        self.col_selector_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
+        # Not packed yet — populated and packed by _refresh_column_selector() after file load
 
-        instr_header = ctk.CTkFrame(instr_frame, fg_color='transparent')
+        # ── Advanced toggle + Instruction input ──
+        self.advanced_toggle_btn = ctk.CTkButton(
+            view, text="▸  Custom Instruction (Advanced)",
+            height=28, anchor='w',
+            font=(BRAND['font_family'], 11),
+            fg_color='transparent', hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_muted'],
+            border_color=BRAND['border'], border_width=1,
+            corner_radius=8,
+            command=self._toggle_advanced_instruction,
+        )
+        self.advanced_toggle_btn.pack(fill='x', pady=(0, 4))
+
+        self.instr_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
+        # Packed immediately so it's visible before a file is loaded
+        self.instr_frame.pack(fill='x', pady=(0, 12))
+
+        instr_header = ctk.CTkFrame(self.instr_frame, fg_color='transparent')
         instr_header.pack(fill='x', padx=16, pady=(12, 4))
 
         ctk.CTkLabel(instr_header, text="What do you need?",
@@ -406,7 +430,7 @@ class WescoMROParser(ctk.CTk):
         help_btn.pack(side='right')
 
         self.instruction_input = ctk.CTkTextbox(
-            instr_frame, height=60,
+            self.instr_frame, height=60,
             font=(BRAND['font_family'], 12),
             fg_color=BRAND['bg_input'],
             text_color=BRAND['text_primary'],
@@ -428,7 +452,7 @@ class WescoMROParser(ctk.CTk):
         self.instruction_input.bind('<KeyRelease>', lambda e: self._update_interpretation())
 
         # Interpretation feedback (now more prominent with badge style)
-        interp_container = ctk.CTkFrame(instr_frame, fg_color='transparent')
+        interp_container = ctk.CTkFrame(self.instr_frame, fg_color='transparent')
         interp_container.pack(fill='x', padx=16, pady=(4, 0))
 
         self.interp_badge = ctk.CTkFrame(interp_container, fg_color=BRAND['bg_input'],
@@ -438,7 +462,7 @@ class WescoMROParser(ctk.CTk):
                                           text_color=BRAND['text_secondary'])
 
         # Suggestion chips
-        self.suggestion_frame = ctk.CTkFrame(instr_frame, fg_color='transparent')
+        self.suggestion_frame = ctk.CTkFrame(self.instr_frame, fg_color='transparent')
         self.suggestion_frame.pack(fill='x', padx=16, pady=(4, 8))
 
         suggestions = [
@@ -818,7 +842,7 @@ class WescoMROParser(ctk.CTk):
             tips.append("💡  Add empty columns next to your source data for results")
             tips.append("💡  Empty columns should be to the RIGHT of source data")
 
-        tips.append("✍️  Write your instruction below to specify what to extract")
+        tips.append("☑️  Check the columns below to select your source data")
 
         for tip in tips:
             tip_label = ctk.CTkLabel(
@@ -849,6 +873,9 @@ class WescoMROParser(ctk.CTk):
 
             # Map columns using smart detection
             self.column_mapping = map_columns(self.df_input, self.training_data)
+
+            # Build/refresh the column selector UI
+            self._refresh_column_selector()
 
             self.import_label.configure(text=f"✓  {filename}")
             self.file_info_label.configure(
@@ -976,6 +1003,207 @@ The parser understands phrases like:
 """
         messagebox.showinfo("Instruction Writing Guide", help_text)
 
+    # ───────────────────────────────────────────────────────
+    #  COLUMN-FIRST SELECTOR
+    # ───────────────────────────────────────────────────────
+
+    def _toggle_advanced_instruction(self):
+        """Show or hide the instruction text box (Advanced/Custom mode)."""
+        if self._advanced_visible:
+            self.instr_frame.pack_forget()
+            self._advanced_visible = False
+            self.advanced_toggle_btn.configure(text="▸  Custom Instruction (Advanced)")
+        else:
+            # Pack instr_frame after the advanced toggle button
+            self.instr_frame.pack(fill='x', pady=(0, 12),
+                                   after=self.advanced_toggle_btn)
+            self._advanced_visible = True
+            self.advanced_toggle_btn.configure(text="▾  Custom Instruction (Advanced)")
+
+    def _get_column_preview(self, col_name: str, n: int = 5) -> str:
+        """Return first N non-null values from a column as a readable string."""
+        if self.df_input is None or col_name not in self.df_input.columns:
+            return "No data"
+        sample = self.df_input[col_name].dropna().head(n).astype(str).tolist()
+        if not sample:
+            return "(empty column)"
+        return "\n".join(f"  {v[:80]}" for v in sample)
+
+    def _refresh_column_selector(self):
+        """
+        Rebuild the column selector widget after a file is loaded.
+
+        Shows column checkboxes with auto-suggestions, output placement radio
+        buttons, and an optional supplier column dropdown.  Packed with
+        after=self.import_frame so it sits between the import zone and the
+        Advanced instruction toggle.
+        """
+        if self.df_input is None:
+            return
+
+        # Clear previous content
+        for widget in self.col_selector_frame.winfo_children():
+            widget.destroy()
+        self.col_selector_vars = {}
+
+        # Build suggestions from the already-computed column_mapping
+        self._col_suggestions = suggest_columns(self.df_input, self.column_mapping)
+        suggested_cols = {s['column'] for s in self._col_suggestions.get('source_suggestions', [])}
+        suggestion_meta = {s['column']: s for s in self._col_suggestions.get('source_suggestions', [])}
+
+        cols = list(self.df_input.columns)
+
+        # ── Header ──
+        hdr = ctk.CTkFrame(self.col_selector_frame, fg_color='transparent')
+        hdr.pack(fill='x', padx=16, pady=(12, 4))
+        ctk.CTkLabel(hdr, text="SOURCE COLUMNS",
+                     font=(BRAND['font_family'], 12, 'bold'),
+                     text_color=BRAND['text_primary']).pack(side='left')
+        ctk.CTkLabel(hdr, text="Select columns to extract from",
+                     font=(BRAND['font_family'], 10),
+                     text_color=BRAND['text_muted']).pack(side='left', padx=(8, 0))
+
+        # ── Scrollable column list ──
+        scroll = ctk.CTkScrollableFrame(self.col_selector_frame,
+                                         fg_color='transparent', height=180)
+        scroll.pack(fill='x', padx=8, pady=4)
+
+        # Column preview label (updated on click)
+        self._col_preview_label = ctk.CTkLabel(
+            self.col_selector_frame, text="",
+            font=(BRAND['font_mono'], 9),
+            text_color=BRAND['text_muted'],
+            justify='left', anchor='w',
+        )
+
+        for i, col in enumerate(cols):
+            letter = chr(ord('A') + i) if i < 26 else f"Col{i + 1}"
+            is_suggested = col in suggested_cols
+            meta = suggestion_meta.get(col, {})
+
+            row = ctk.CTkFrame(scroll, fg_color='transparent')
+            row.pack(fill='x', pady=1)
+
+            var = tk.BooleanVar(value=is_suggested)
+            self.col_selector_vars[col] = var
+
+            cb = ctk.CTkCheckBox(
+                row,
+                text=f"{letter}:  {col}",
+                variable=var,
+                font=(BRAND['font_family'], 11),
+                text_color=BRAND['accent'] if is_suggested else BRAND['text_primary'],
+                fg_color=BRAND['accent'],
+                hover_color=BRAND['accent_hover'],
+                command=self._on_col_selector_change,
+            )
+            cb.pack(side='left', padx=4)
+
+            # Right side: reason/hint
+            hint = meta.get('reason', '') if is_suggested else ''
+            if is_suggested:
+                ctk.CTkLabel(row, text=f"⭐ {hint}",
+                             font=(BRAND['font_mono'], 9),
+                             text_color=BRAND['warning']).pack(side='right', padx=8)
+            else:
+                # Show avg char length for all columns so user can identify text cols
+                try:
+                    s = self.df_input[col].dropna().head(10).astype(str)
+                    avg_len = int(s.str.len().mean()) if len(s) > 0 else 0
+                    ctk.CTkLabel(row, text=f"~{avg_len} chars",
+                                 font=(BRAND['font_mono'], 9),
+                                 text_color=BRAND['text_muted']).pack(side='right', padx=8)
+                except Exception:
+                    pass
+
+            # Click row to preview column values
+            def _show_preview(c=col):
+                preview = self._get_column_preview(c)
+                self._col_preview_label.configure(
+                    text=f"  Preview — {c}:\n{preview}"
+                )
+                self._col_preview_label.pack(fill='x', padx=16, pady=(0, 4))
+
+            row.bind('<Button-1>', lambda e, c=col: _show_preview(c))
+
+        # Collapse preview initially
+        # (it's shown on row click, not packed by default)
+
+        # ── Output placement ──
+        placement_sep = ctk.CTkFrame(self.col_selector_frame,
+                                      fg_color=BRAND['border'], height=1)
+        placement_sep.pack(fill='x', padx=16, pady=(4, 8))
+
+        placement_hdr = ctk.CTkFrame(self.col_selector_frame, fg_color='transparent')
+        placement_hdr.pack(fill='x', padx=16)
+        ctk.CTkLabel(placement_hdr, text="OUTPUT PLACEMENT",
+                     font=(BRAND['font_family'], 11, 'bold'),
+                     text_color=BRAND['text_primary']).pack(side='left')
+
+        self.output_position_var = tk.StringVar(value='end')
+        radio_frame = ctk.CTkFrame(self.col_selector_frame, fg_color='transparent')
+        radio_frame.pack(fill='x', padx=24, pady=(4, 0))
+
+        ctk.CTkRadioButton(radio_frame,
+                           text="Insert MFG + PN at end (append new columns)",
+                           variable=self.output_position_var, value='end',
+                           font=(BRAND['font_family'], 11),
+                           fg_color=BRAND['accent'],
+                           hover_color=BRAND['accent_hover'],
+                           ).pack(anchor='w', pady=2)
+        ctk.CTkRadioButton(radio_frame,
+                           text="Insert MFG + PN at front (columns A–B)",
+                           variable=self.output_position_var, value='front',
+                           font=(BRAND['font_family'], 11),
+                           fg_color=BRAND['accent'],
+                           hover_color=BRAND['accent_hover'],
+                           ).pack(anchor='w', pady=2)
+
+        # ── Supplier column dropdown ──
+        sup_suggestion = self._col_suggestions.get('supplier_suggestion')
+        sup_frame = ctk.CTkFrame(self.col_selector_frame, fg_color='transparent')
+        sup_frame.pack(fill='x', padx=16, pady=(8, 12))
+
+        ctk.CTkLabel(sup_frame,
+                     text="SUPPLIER COLUMN  (optional — used as MFG fallback)",
+                     font=(BRAND['font_family'], 10),
+                     text_color=BRAND['text_muted']).pack(anchor='w')
+
+        sup_options = ['None'] + cols
+        default_sup = sup_suggestion['column'] if sup_suggestion else 'None'
+        self.supplier_col_var = tk.StringVar(value=default_sup)
+
+        ctk.CTkOptionMenu(
+            sup_frame,
+            values=sup_options,
+            variable=self.supplier_col_var,
+            font=(BRAND['font_family'], 11),
+            fg_color=BRAND['bg_input'],
+            button_color=BRAND['accent_dim'],
+            button_hover_color=BRAND['accent'],
+            dropdown_fg_color=BRAND['bg_card'],
+            text_color=BRAND['text_primary'],
+            width=260,
+        ).pack(anchor='w', pady=(4, 0))
+
+        # Pack the frame into the view right after the import frame
+        self.col_selector_frame.pack(fill='x', pady=(0, 12),
+                                      after=self.import_frame)
+
+        # After file load: collapse the instruction section (it becomes Advanced)
+        if self._advanced_visible:
+            pass  # leave as-is if user had it open
+        else:
+            self.instr_frame.pack_forget()
+            self.advanced_toggle_btn.configure(text="▸  Custom Instruction (Advanced)")
+
+    def _on_col_selector_change(self):
+        """Called when any column checkbox changes — could enable/disable run button."""
+        selected = [col for col, var in self.col_selector_vars.items() if var.get()]
+        # Run button state: enabled if file loaded (regardless of selection)
+        # (zero selections → engine will fall back to instruction parsing)
+        pass
+
     def _render_template_buttons(self, templates: list):
         """Clear and rebuild the template buttons in self.templates_frame."""
         for widget in self.templates_frame.winfo_children():
@@ -1042,46 +1270,58 @@ The parser understands phrases like:
         try:
             instruction = self._get_instruction()
             cols = list(self.df_input.columns)
+
+            # ── Column-first mode: explicit UI selection takes priority ──
+            explicit_sources = [col for col, var in self.col_selector_vars.items()
+                                 if var.get()]
+
+            # Always parse instruction (for pipeline type detection + output column names).
+            # If no instruction is given, parsed fields will be empty/defaults.
             parsed = parse_instruction(instruction, cols, column_mapping=self.column_mapping)
 
-            # Auto-detect if needed
+            # Auto-detect pipeline type if not specified by instruction
             pipeline = parsed.pipeline
             if pipeline == 'auto':
                 pipeline = auto_detect_pipeline(self.df_input)
 
             self.after(0, lambda: self.progress_bar.set(0.2))
 
-            # Extract supplier column from mapping (Fix 1: always pass supplier_col)
+            # ── Supplier column: dropdown beats mapping fallback ──
             supplier_col = None
-            if self.column_mapping:
+            if self.supplier_col_var:
+                sc = self.supplier_col_var.get()
+                supplier_col = sc if sc and sc != 'None' else None
+            if supplier_col is None and self.column_mapping:
                 supplier_col = self.column_mapping.get('supplier')
 
-            # Run the appropriate pipeline
+            # ── Route to appropriate pipeline ──
             if pipeline == 'mfg_pn':
-                source_cols = parsed.source_columns or [
-                    c for c in cols if any(k in c.upper() for k in
-                    ['MATERIAL', 'DESCRIPTION', 'PO TEXT'])
-                ]
-
-                # Fix 5: Nuclear fallback — if any source column is primarily numeric,
-                # the instruction parser matched the wrong column; fall back to column_mapper.
-                if source_cols and self.column_mapping:
-                    mapper_sources = (
-                        self.column_mapping.get('source_description', []) +
-                        self.column_mapping.get('source_po_text', []) +
-                        self.column_mapping.get('source_notes', [])
-                    )
-                    if mapper_sources:
-                        for col in list(source_cols):
-                            if col in self.df_input.columns:
-                                sample = self.df_input[col].dropna().head(20).astype(str)
-                                text_pct = (
-                                    sum(1 for v in sample if any(c.isalpha() for c in str(v)))
-                                    / max(len(sample), 1)
-                                )
-                                if text_pct < 0.3:
-                                    source_cols = mapper_sources
-                                    break
+                if explicit_sources:
+                    # COLUMN-FIRST: use exactly what the user selected — no guessing
+                    source_cols = explicit_sources
+                else:
+                    # LEGACY: derive from instruction parsing with nuclear fallback
+                    source_cols = parsed.source_columns or [
+                        c for c in cols if any(k in c.upper() for k in
+                        ['MATERIAL', 'DESCRIPTION', 'PO TEXT'])
+                    ]
+                    if source_cols and self.column_mapping:
+                        mapper_sources = (
+                            self.column_mapping.get('source_description', []) +
+                            self.column_mapping.get('source_po_text', []) +
+                            self.column_mapping.get('source_notes', [])
+                        )
+                        if mapper_sources:
+                            for col in list(source_cols):
+                                if col in self.df_input.columns:
+                                    sample = self.df_input[col].dropna().head(20).astype(str)
+                                    text_pct = (
+                                        sum(1 for v in sample if any(c.isalpha() for c in str(v)))
+                                        / max(len(sample), 1)
+                                    )
+                                    if text_pct < 0.3:
+                                        source_cols = mapper_sources
+                                        break
 
                 result = pipeline_mfg_pn(
                     self.df_input, source_cols,
@@ -1093,7 +1333,6 @@ The parser understands phrases like:
                 )
 
             elif pipeline == 'part_number':
-                # Find PN and MFG columns
                 pn_col = next((c for c in cols if 'PART NUMBER' in c.upper()), 'Part Number 1')
                 mfg_col = next((c for c in cols if 'MANUFACTURER' in c.upper()), 'Manufacturer 1')
                 result = pipeline_part_number(self.df_input, pn_col=pn_col, mfg_col=mfg_col)
@@ -1107,18 +1346,31 @@ The parser understands phrases like:
                     item_col=item_col, pattern=sim_pattern,
                 )
             else:
-                # Default to mfg_pn
-                source_cols = [c for c in cols if any(k in c.upper() for k in
-                               ['MATERIAL', 'DESCRIPTION', 'PO TEXT', 'NOTES'])]
-                if not source_cols:
-                    source_cols = cols[:3]
+                # Default fallback: mfg_pn with best available sources
+                if explicit_sources:
+                    source_cols = explicit_sources
+                else:
+                    source_cols = [c for c in cols if any(k in c.upper() for k in
+                                   ['MATERIAL', 'DESCRIPTION', 'PO TEXT', 'NOTES'])]
+                    if not source_cols:
+                        source_cols = cols[:3]
                 result = pipeline_mfg_pn(self.df_input, source_cols,
                                          column_mapping=self.column_mapping,
                                          supplier_col=supplier_col)
 
             self.after(0, lambda: self.progress_bar.set(0.7))
 
-            # Run QA
+            # ── Output placement: reorder MFG/PN to front if requested ──
+            if (self.output_position_var and self.output_position_var.get() == 'front'):
+                mfg = parsed.target_mfg_col
+                pn = parsed.target_pn_col
+                df = result.df
+                front_cols = [c for c in (mfg, pn) if c in df.columns]
+                other_cols = [c for c in df.columns if c not in front_cols]
+                if front_cols:
+                    result.df = df[front_cols + other_cols]
+
+            # ── Run QA ──
             mfg_col_name = parsed.target_mfg_col
             issues = run_qa(result.df, mfg_col=mfg_col_name)
 
@@ -1133,7 +1385,7 @@ The parser understands phrases like:
             history_db.save_job(
                 filename=os.path.basename(self.current_file or 'unknown'),
                 instruction=instruction, pipeline=pipeline,
-                source_columns=parsed.source_columns,
+                source_columns=explicit_sources or parsed.source_columns,
                 target_mfg=parsed.target_mfg_col,
                 target_pn=parsed.target_pn_col,
                 add_sim=parsed.add_sim,

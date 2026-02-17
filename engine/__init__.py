@@ -1,7 +1,7 @@
 # Wesco MRO Parser Engine
 # Built by Nolan Sulpizio for Wesco International - Global Accounts Team
-__version__ = "3.5.0"
-# v3.5.0 — Schema-Aware Routing: schema_classifier.py synthesizes column_mapper
-# and file_profiler into a structural schema template (SAP_STANDARD, SAP_SHORT_TEXT,
-# SAP_DUAL_SOURCE, DISTRIBUTOR_ORDER, LABELED_SPEC, GENERIC). Multiplicative weight
-# merge ensures both structural and content signals must agree for strong boosts.
+__version__ = "4.0.0"
+# v4.0.0 — Column-First Input Redesign: explicit column selector replaces free-text
+# instruction parsing as primary input method. suggest_columns() added to column_mapper
+# for UI-ready suggestions with confidence scores. _execute_pipeline() uses explicit
+# selections with zero-ambiguity routing; instruction box preserved as Advanced/collapsible.
