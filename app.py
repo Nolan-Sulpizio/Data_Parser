@@ -296,8 +296,11 @@ class WescoMROParser(ctk.CTk):
                     )
                     tip_label.pack(anchor='w', padx=8, pady=2, fill='x')
 
-            # Pack immediately after the toggle button (not at end of sidebar)
-            self.help_panel.pack(after=self.help_toggle_btn, fill='both', padx=16, pady=(4, 8))
+            # Unpack spacer → pack panel → repack spacer so panel is always
+            # inserted between the toggle button and the spacer, not at the end.
+            self._sidebar_spacer.pack_forget()
+            self.help_panel.pack(fill='x', padx=16, pady=(4, 8))
+            self._sidebar_spacer.pack(fill='both', expand=True)
         else:
             self.help_toggle_btn.configure(text="📖  How to Use  ▼")
             self.help_panel.pack_forget()
@@ -1260,6 +1263,9 @@ The parser understands phrases like:
             return
 
         self.is_processing = True
+        # Restore col selector if it was hidden after a previous run
+        if not self.col_selector_frame.winfo_ismapped():
+            self.col_selector_frame.pack(fill='x', pady=(0, 12), after=self.import_frame)
         self.run_btn.configure(state='disabled', text="⏳  Processing...")
         self.progress_bar.set(0)
         self.status_label.configure(text="Processing...")
@@ -1412,6 +1418,10 @@ The parser understands phrases like:
         self.run_btn.configure(state='normal', text="▶  Run Parser")
         self.export_btn.configure(state='normal')
         self.save_config_btn.configure(state='normal')
+
+        # Collapse column selector so the preview table has room to show results
+        self.col_selector_frame.pack_forget()
+        self.run_btn.configure(text="▶  Re-run  (↺ reconfigure)")
 
         # Show output in preview
         self.preview_toggle.set("Output")
