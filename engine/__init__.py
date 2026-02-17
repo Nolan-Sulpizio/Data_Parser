@@ -1,3 +1,3 @@
 # Wesco MRO Parser Engine
 # Built by Nolan Sulpizio for Wesco International - Global Accounts Team
-__version__ = "2.1.2"
+__version__ = "3.1.0"
