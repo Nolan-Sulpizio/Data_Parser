@@ -130,12 +130,31 @@ def parse_instruction(text: str, available_columns: list[str] = None,
 
     # ── 2) Detect source columns ──
     if available_columns:
-        # Try to match mentioned column names to actual columns
+        # Try to match mentioned column names to actual columns using word-boundary matching.
+        # Bare substring matching causes false positives: a column named "Material" would
+        # match an instruction mentioning "Material Description" even though they are
+        # different concepts. We require the column name to appear as a whole phrase, and
+        # apply an extra guard for short/ambiguous single-word column names.
         for col in available_columns:
-            # Check if column name appears in the instruction
             col_clean = col.strip().lower()
-            if col_clean in t_lower or col_clean.replace(' ', '_') in t_lower.replace(' ', '_'):
-                result.source_columns.append(col)
+            # Build a pattern that requires the column name to be preceded and followed
+            # by a non-letter character (word-boundary equivalent for multi-word names).
+            pattern = r'(?<![a-z])' + re.escape(col_clean) + r'(?![a-z])'
+            if not re.search(pattern, t_lower):
+                # Also try with underscores mapped to spaces
+                alt = col_clean.replace(' ', '_')
+                alt_t = t_lower.replace(' ', '_')
+                alt_pattern = r'(?<![a-z])' + re.escape(alt) + r'(?![a-z])'
+                if not re.search(alt_pattern, alt_t):
+                    continue
+            # Extra guard: short single-word column names (≤8 chars) must be explicitly
+            # referenced with a preposition or "column" keyword to avoid matching words
+            # that happen to also be column names (e.g. "Material" in "Material Description").
+            if len(col_clean) <= 8 and ' ' not in col_clean:
+                anchor_pattern = r'(?:from|in|column|col\.?)\s+' + re.escape(col_clean)
+                if not re.search(anchor_pattern, t_lower):
+                    continue
+            result.source_columns.append(col)
 
     # Also check for column letter references ("column C", "col D")
     letter_matches = COL_LETTER_RE.findall(t)

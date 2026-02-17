@@ -58,12 +58,16 @@ NORMALIZE_MFG.update({
     'PHOENIX CNTCT': 'PHOENIX CONTACT',
     'PHNX CNTCT': 'PHOENIX CONTACT',
     'FOLCIERI': 'BRUNO FOLCIERI',
+    'BRU FOLC': 'BRUNO FOLCIERI',   # v3.2: abbreviated form found in Short Text (Fix 4)
     'SEW EURODR': 'SEW EURODRIVE',
     'SEW': 'SEW EURODRIVE',
     'SEW,EURODRIVE': 'SEW EURODRIVE',
     'ROSSI': 'ROSSI MOTORIDUTTORI',
     'MOLR': 'EATON',
     'BACO': 'BACO CONTROLS',
+    # v3.2: Fix 3 — ENDRESS HAUSER partial-name normalization
+    'HAUSER': 'ENDRESS HAUSER',
+    'ENDRESS': 'ENDRESS HAUSER',
 })
 
 KNOWN_MANUFACTURERS = set(_training.get('known_manufacturers', []))
@@ -74,6 +78,8 @@ KNOWN_MANUFACTURERS.update({
     'OLI', 'WEG', 'HKK', 'WAM', 'LAFERT', 'MORRIS', 'DODGE',
     'MARTIN', 'WOODS', 'AMEC', 'LOVEJOY', 'GATES',
     'BALEMASTER', 'PILZ', 'FESTO',
+    # v3.2: Fix 3 — add ENDRESS HAUSER so it never gets blocked
+    'ENDRESS HAUSER',
 })
 
 DISTRIBUTORS = {
@@ -90,6 +96,8 @@ DESCRIPTORS = {
     'LVL', 'CTRL', 'FIBRE OPTIC', 'EF-11', 'EF 2', 'EF1 1/2', 'EF 1 1/2', 'EF1/2',
     # v3: short mechanical/electrical descriptor codes that must never be treated as MFG
     'TE', 'NM', 'BLK', 'DIA', 'GR', 'FR', 'DC', 'AC', 'SP', 'SS',
+    # v3.2: Italian screw-standard codes (Fix 3)
+    'TSEI', 'TCEI',
     'RBR', 'STL', 'BRS', 'ALU', 'CU', 'PVC', 'PE', 'PP', 'CS',
     'HEX', 'SQ', 'RND', 'FLT', 'THD', 'TAP',
     'MTR', 'DRV', 'BRG', 'SCR', 'VLV', 'FAN', 'PMP',
@@ -114,6 +122,10 @@ MFG_BLOCKLIST = {
     'RECEPTACLE', 'REGULATOR', 'BEARING', 'BUSHING', 'COUPLING',
     # Material/property descriptors
     'RESIST', 'PLANE',
+    # v3.2: Fix 3 — position descriptors, material codes, equipment types
+    'UPPER', 'LOWER', 'CENTRAL', 'FIBERGLASS', 'DELABELER',
+    'TSEI', 'TCEI',   # Italian screw standards
+    'MC-VLV',         # Valve type abbreviation (not a manufacturer)
     # Abbreviations for non-MFG things
     'FLG', 'RLR', 'KIT', 'BAR', 'CVR', 'PWR', 'NPT', 'LLC',
     'MAC', 'LIP', 'ZNT', 'GRY', 'WHI', 'BLU', 'YEL', 'GRN',
@@ -204,6 +216,8 @@ CONFIDENCE_SCORES = {
     'pn_catalog': 0.60,         # Pure catalog number (entire text IS the PN)
     'pn_prefix_decode': 0.75,   # Decoded from manufacturer prefix
     'pn_dash_catalog': 0.80,    # Dash-separated catalog number (McMaster format)
+    'pn_trailing_catalog': 0.68,  # v3.2: Trailing code in DESC,DESC,CATALOG format (Fix 1)
+    'pn_trailing_numeric': 0.50,  # v3.2: Trailing pure-numeric code ≥7 digits (Fix 5)
 
     # MFG extraction sources
     'mfg_label': 0.95,          # MANUFACTURER: explicit label
@@ -437,7 +451,15 @@ def extract_pn_heuristic(text: str) -> tuple:
                 and not (len(tok2) <= 3 and tok2.isalpha())):  # Fix 4: reject short pure-alpha
             cands.append(tok2)
     if cands:
-        best = cands[-1]
+        # v3.2 Fix 2: prefer highest-scoring candidate (favours longer, mixed-format codes
+        # like 3AXD50000731121 over shorter trailing tokens). Rightmost position used as
+        # tiebreaker so original last-wins behaviour is preserved when scores are equal.
+        if len(cands) == 1:
+            best = cands[0]
+        else:
+            scored_cands = [(c, _score_heuristic_pn(c), i) for i, c in enumerate(cands)]
+            scored_cands.sort(key=lambda x: (x[1], x[2]), reverse=True)
+            best = scored_cands[0][0]
         conf = _score_heuristic_pn(best)  # Fix 6: graduated confidence
         return best, 'heuristic', conf
     return None, 'none', 0.0
@@ -460,6 +482,85 @@ def extract_pn_dash_catalog(text: str) -> tuple:
                 and 3 <= len(candidate) <= 20):
             return candidate, 'dash_catalog', CONFIDENCE_SCORES['pn_dash_catalog']
     return None, 'none', 0.0
+
+
+def extract_pn_trailing_catalog(text: str) -> tuple:
+    """
+    v3.2 Fix 1 — Extract PN from trailing catalog code in comma-delimited description.
+
+    Targets McMaster-Carr and Applied Industrial rows in DESC,DESC,CATALOG format:
+        'SWITCH,DISCONNECT,80A,7815N15'   → PN='7815N15'
+        'ENCLOSURE,ELECTRICAL,7619K144'   → PN='7619K144'
+        'SWITCH,EMERGENCY STOP,6741K46'   → PN='6741K46'
+
+    Validation gates:
+      - ≥ 2 tokens total (need at least one descriptor + one code)
+      - Last token has mixed alpha+digits
+      - Last token length 5-15 chars
+      - Last token is NOT a spec value or descriptor pattern
+      - At least half of preceding tokens are alpha-only or spec values
+
+    Returns (pn, 'trailing_catalog', 0.68) or (None, 'none', 0.0).
+    Anti-regression: caller skips this candidate if a labeled PN (conf 0.95) already exists.
+    """
+    if not text:
+        return None, 'none', 0.0
+    t = str(text).strip().upper()
+    tokens = [tok.strip() for tok in t.split(',')]
+    if len(tokens) < 2:
+        return None, 'none', 0.0
+
+    last = tokens[-1]
+    # Must have mixed alpha+digits
+    if not (re.search(r'[A-Z]', last) and re.search(r'[0-9]', last)):
+        return None, 'none', 0.0
+    # Length gate: 5-15 chars
+    if not (5 <= len(last) <= 15):
+        return None, 'none', 0.0
+    # Not a spec value or descriptor-pattern
+    if _is_spec_value(last) or _is_descriptor_pn(last):
+        return None, 'none', 0.0
+
+    # Preceding tokens: majority should be alpha-only descriptors or spec values
+    preceding = tokens[:-1]
+    descriptor_count = sum(
+        1 for tok in preceding
+        if tok.isalpha() or _is_spec_value(tok) or tok in BARE_SPEC_TOKENS
+    )
+    if descriptor_count < len(preceding) / 2:
+        return None, 'none', 0.0
+
+    return last, 'trailing_catalog', CONFIDENCE_SCORES['pn_trailing_catalog']
+
+
+def extract_pn_trailing_numeric(text: str) -> tuple:
+    """
+    v3.2 Fix 5 — Extract pure-numeric trailing part code from comma-delimited description.
+
+    Targets Bruno Folcieri internal part codes that are pure digits:
+        'BOX,COUNTERSHAFT,4900047'       → PN='4900047'
+        'SHAFT,SPACER,BOTTOM,17000120'   → PN='17000120' (if ≥7 digits)
+
+    Validation gates:
+      - ≥ 2 tokens total
+      - Last token is purely numeric
+      - Last token is ≥ 7 digits (guards against quantities, dimension numbers)
+
+    Confidence 0.50 ensures any structured/labeled/trailing_catalog candidate wins over this.
+    Returns (pn, 'trailing_numeric', 0.50) or (None, 'none', 0.0).
+    """
+    if not text:
+        return None, 'none', 0.0
+    t = str(text).strip().upper()
+    tokens = [tok.strip() for tok in t.split(',')]
+    if len(tokens) < 2:
+        return None, 'none', 0.0
+
+    last = tokens[-1]
+    if not (last.isdigit() and len(last) >= 7):
+        return None, 'none', 0.0
+
+    return last, 'trailing_numeric', CONFIDENCE_SCORES['pn_trailing_numeric']
 
 
 # ─────────────────────────────────────────────────────────────
@@ -976,10 +1077,24 @@ def pipeline_mfg_pn(
             if pn:
                 pn_candidates.append(ExtractionCandidate(pn, 'heuristic', conf))
 
-            # Fix 5: dash-separated catalog number (McMaster-Carr / ULINE format)
+            # Fix 5 (old): dash-separated catalog number (McMaster-Carr / ULINE format)
             pn, src, conf = extract_pn_dash_catalog(t)
             if pn:
                 pn_candidates.append(ExtractionCandidate(pn, 'dash_catalog', conf))
+
+            # v3.2 Fix 1: trailing catalog code in DESC,DESC,CATALOG format
+            # Skip if a labeled PN already exists (labeled confidence 0.95 wins naturally,
+            # but explicit guard prevents noisy candidates polluting the list).
+            has_label = any(c.source == 'label' for c in pn_candidates)
+            if not has_label:
+                pn, src, conf = extract_pn_trailing_catalog(t)
+                if pn:
+                    pn_candidates.append(ExtractionCandidate(pn, 'trailing_catalog', conf))
+
+            # v3.2 Fix 5: trailing pure-numeric code ≥7 digits (Bruno Folcieri internal codes)
+            pn, src, conf = extract_pn_trailing_numeric(t)
+            if pn:
+                pn_candidates.append(ExtractionCandidate(pn, 'trailing_numeric', conf))
 
         # Strategy: prefix decode (from first token)
         prefix_mfg, prefix_pn = decode_mfg_prefix(combined_text)

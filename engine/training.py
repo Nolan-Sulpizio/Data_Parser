@@ -186,7 +186,27 @@ def ingest_training_files(directory: str, output_path: str = DEFAULT_TRAINING_FI
 
     # Finalize aggregated data
     training_data['total_rows_analyzed'] = total_rows
-    training_data['known_manufacturers'] = sorted(list(all_mfgs))
+
+    # ── Layer 5A: Filter descriptors from known_manufacturers ─────────────────
+    # Import DESCRIPTORS and DESCRIPTOR_KEYWORDS from parser_core to filter out
+    # tokens that were incorrectly ingested from MFG columns (e.g. TE, AB, CTRL, GRN).
+    try:
+        from .parser_core import DESCRIPTORS, DESCRIPTOR_KEYWORDS
+    except ImportError:
+        DESCRIPTORS = set()
+        DESCRIPTOR_KEYWORDS = []
+
+    REAL_SHORT_MFGS = {'ABB', 'GE', '3M', 'SKF', 'IFM', 'SMC', 'NHP', 'SEW', 'APC'}
+    filtered_mfgs = {
+        m for m in all_mfgs
+        if m not in DESCRIPTORS
+        and not any(k in m for k in DESCRIPTOR_KEYWORDS)
+        and len(m) > 2
+    }
+    # Restore real 2-3 char manufacturers that the length filter would exclude
+    filtered_mfgs.update({m for m in all_mfgs if m in REAL_SHORT_MFGS})
+
+    training_data['known_manufacturers'] = sorted(list(filtered_mfgs))
     training_data['pn_patterns']['format_frequency'] = dict(pn_format_counter)
 
     if all_pn_lengths:
@@ -365,6 +385,116 @@ def _save_training_data(data: dict, path: str):
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         print(f"Error: Failed to save training data to {path}: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  INCREMENTAL LEARNING FROM EXPORT (Layer 5C)
+# ═══════════════════════════════════════════════════════════════
+
+def learn_from_export(
+    exported_df: pd.DataFrame,
+    column_mapping: dict,
+    training_path: str = DEFAULT_TRAINING_FILE,
+) -> dict:
+    """
+    Incrementally update training data from a user-exported (human-corrected) file.
+
+    Called after a user exports their cleaned workbook. Does NOT replace full
+    ingestion — it adds incremental knowledge:
+      - New manufacturer names → known_manufacturers
+      - New abbreviation mappings → mfg_normalization
+      - New column names → column_aliases
+
+    Args:
+        exported_df: The exported DataFrame (with MFG/PN columns filled)
+        column_mapping: Column mapping dict from map_columns()
+        training_path: Path to training_data.json to update
+
+    Returns:
+        Summary dict of what was added: {added_mfgs, updated_normalizations}
+    """
+    # Load existing training data
+    existing = load_training_data(training_path)
+
+    mfg_col = column_mapping.get('mfg_output')
+    source_cols = (
+        column_mapping.get('source_description', [])
+        + column_mapping.get('source_po_text', [])
+        + column_mapping.get('source_notes', [])
+    )
+
+    added_mfgs = []
+    updated_normalizations = []
+
+    if mfg_col and mfg_col in exported_df.columns:
+        # Import descriptor filter
+        try:
+            from .parser_core import DESCRIPTORS, DESCRIPTOR_KEYWORDS
+        except ImportError:
+            DESCRIPTORS = set()
+            DESCRIPTOR_KEYWORDS = []
+
+        REAL_SHORT_MFGS = {'ABB', 'GE', '3M', 'SKF', 'IFM', 'SMC', 'NHP', 'SEW', 'APC'}
+        existing_mfgs = set(existing.get('known_manufacturers', []))
+
+        for _, row in exported_df.iterrows():
+            mfg_value = row.get(mfg_col)
+            if pd.isna(mfg_value) or str(mfg_value).strip() in ('', 'nan', 'None'):
+                continue
+
+            mfg_clean = str(mfg_value).strip().upper()
+
+            # Apply same filter as ingest_training_files
+            is_valid = (
+                mfg_clean not in DESCRIPTORS
+                and not any(k in mfg_clean for k in DESCRIPTOR_KEYWORDS)
+                and (len(mfg_clean) > 2 or mfg_clean in REAL_SHORT_MFGS)
+            )
+            if not is_valid:
+                continue
+
+            # Add new manufacturer to known list
+            if mfg_clean not in existing_mfgs:
+                existing_mfgs.add(mfg_clean)
+                added_mfgs.append(mfg_clean)
+
+            # Look for normalization patterns in source columns
+            for src_col in source_cols:
+                if src_col not in exported_df.columns:
+                    continue
+                source_text = row.get(src_col)
+                if pd.isna(source_text):
+                    continue
+                source_upper = str(source_text).strip().upper()
+                # Only add if not already in normalization map
+                _extract_mfg_normalization(
+                    source_upper, mfg_clean,
+                    existing['mfg_normalization']
+                )
+                # Track whether we added something new
+                if mfg_clean in existing.get('mfg_normalization', {}).values():
+                    new_keys = [
+                        k for k, v in existing['mfg_normalization'].items()
+                        if v == mfg_clean
+                    ]
+                    for k in new_keys:
+                        if k not in updated_normalizations:
+                            updated_normalizations.append(k)
+
+        existing['known_manufacturers'] = sorted(list(existing_mfgs))
+
+    # Record new column name aliases
+    _record_column_aliases(existing, column_mapping, list(exported_df.columns))
+
+    # Save updated training data
+    existing['generated_at'] = datetime.now().isoformat()
+    _save_training_data(existing, training_path)
+
+    return {
+        'added_mfgs': added_mfgs,
+        'updated_normalizations': updated_normalizations,
+        'total_known_manufacturers': len(existing.get('known_manufacturers', [])),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════

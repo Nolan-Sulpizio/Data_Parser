@@ -180,23 +180,16 @@ class WescoMROParser(ctk.CTk):
                                         text_color=BRAND['text_muted'])
         templates_label.pack(anchor='w', padx=20, pady=(16, 8))
 
-        templates = [
+        # Template buttons live in a dedicated frame so they can be rebuilt dynamically
+        self.templates_frame = ctk.CTkFrame(self.sidebar, fg_color='transparent')
+        self.templates_frame.pack(fill='x')
+
+        self._default_templates = [
             ("MFG + PN Extract", "Extract MFG and PN from Material Description and PO Text into MFG and PN columns"),
             ("Part Number Clean", "Clean and validate Part Number 1 from description fields"),
             ("Build SIM Values", "Generate SIM from MFG and ITEM # for rows with missing SIM"),
         ]
-
-        for name, instruction in templates:
-            btn = ctk.CTkButton(
-                self.sidebar, text=f"  {name}", anchor='w',
-                font=(BRAND['font_family'], 11),
-                fg_color=BRAND['accent_dim'],
-                hover_color=BRAND['bg_hover'],
-                text_color=BRAND['accent'],
-                height=32, corner_radius=6,
-                command=lambda inst=instruction: self._apply_template(inst),
-            )
-            btn.pack(fill='x', padx=16, pady=2)
+        self._render_template_buttons(self._default_templates)
 
         # How to Use section (expandable)
         ctk.CTkFrame(self.sidebar, height=1, fg_color=BRAND['border']).pack(fill='x', padx=16, pady=(12, 0))
@@ -868,6 +861,9 @@ class WescoMROParser(ctk.CTk):
             self.status_label.configure(text=f"Loaded: {filename}")
             self.preview_toggle.set("Input")
 
+            # Regenerate quick templates to reference the actual detected columns
+            self._update_templates()
+
             # Show data preparation tips
             self._show_data_tips()
 
@@ -980,6 +976,35 @@ The parser understands phrases like:
 """
         messagebox.showinfo("Instruction Writing Guide", help_text)
 
+    def _render_template_buttons(self, templates: list):
+        """Clear and rebuild the template buttons in self.templates_frame."""
+        for widget in self.templates_frame.winfo_children():
+            widget.destroy()
+        for name, instruction in templates:
+            btn = ctk.CTkButton(
+                self.templates_frame, text=f"  {name}", anchor='w',
+                font=(BRAND['font_family'], 11),
+                fg_color=BRAND['accent_dim'],
+                hover_color=BRAND['bg_hover'],
+                text_color=BRAND['accent'],
+                height=32, corner_radius=6,
+                command=lambda inst=instruction: self._apply_template(inst),
+            )
+            btn.pack(fill='x', padx=16, pady=2)
+
+    def _update_templates(self):
+        """Regenerate quick templates based on detected columns after a file is loaded."""
+        if not self.column_mapping:
+            return
+        desc_cols = self.column_mapping.get('source_description', [])
+        source_text = ' and '.join(desc_cols) if desc_cols else 'description columns'
+        templates = [
+            ("MFG + PN Extract", f"Extract MFG and PN from {source_text}"),
+            ("Part Number Clean", "Clean and validate part numbers from description fields"),
+            ("Build SIM Values", "Generate SIM from MFG and ITEM # for rows with missing SIM"),
+        ]
+        self._render_template_buttons(templates)
+
     def _apply_template(self, instruction: str):
         self._show_parser()
         self.instruction_input.delete('1.0', 'end')
@@ -1026,18 +1051,45 @@ The parser understands phrases like:
 
             self.after(0, lambda: self.progress_bar.set(0.2))
 
+            # Extract supplier column from mapping (Fix 1: always pass supplier_col)
+            supplier_col = None
+            if self.column_mapping:
+                supplier_col = self.column_mapping.get('supplier')
+
             # Run the appropriate pipeline
             if pipeline == 'mfg_pn':
                 source_cols = parsed.source_columns or [
                     c for c in cols if any(k in c.upper() for k in
                     ['MATERIAL', 'DESCRIPTION', 'PO TEXT'])
                 ]
+
+                # Fix 5: Nuclear fallback — if any source column is primarily numeric,
+                # the instruction parser matched the wrong column; fall back to column_mapper.
+                if source_cols and self.column_mapping:
+                    mapper_sources = (
+                        self.column_mapping.get('source_description', []) +
+                        self.column_mapping.get('source_po_text', []) +
+                        self.column_mapping.get('source_notes', [])
+                    )
+                    if mapper_sources:
+                        for col in list(source_cols):
+                            if col in self.df_input.columns:
+                                sample = self.df_input[col].dropna().head(20).astype(str)
+                                text_pct = (
+                                    sum(1 for v in sample if any(c.isalpha() for c in str(v)))
+                                    / max(len(sample), 1)
+                                )
+                                if text_pct < 0.3:
+                                    source_cols = mapper_sources
+                                    break
+
                 result = pipeline_mfg_pn(
                     self.df_input, source_cols,
                     mfg_col=parsed.target_mfg_col,
                     pn_col=parsed.target_pn_col,
                     add_sim=parsed.add_sim,
                     column_mapping=self.column_mapping,
+                    supplier_col=supplier_col,
                 )
 
             elif pipeline == 'part_number':
@@ -1060,7 +1112,9 @@ The parser understands phrases like:
                                ['MATERIAL', 'DESCRIPTION', 'PO TEXT', 'NOTES'])]
                 if not source_cols:
                     source_cols = cols[:3]
-                result = pipeline_mfg_pn(self.df_input, source_cols, column_mapping=self.column_mapping)
+                result = pipeline_mfg_pn(self.df_input, source_cols,
+                                         column_mapping=self.column_mapping,
+                                         supplier_col=supplier_col)
 
             self.after(0, lambda: self.progress_bar.set(0.7))
 

@@ -23,10 +23,12 @@ ROLES = {
     'source_description': [],   # Columns containing product descriptions to parse FROM
     'source_po_text': [],       # PO text / long text columns (secondary source)
     'source_notes': [],         # Notes / supplementary text columns
+    'source_supplier': [],      # Supplier/vendor name columns (for MFG fallback)
     'mfg_output': None,         # Column where MFG should be written TO
     'pn_output': None,          # Column where PN should be written TO
     'sim_output': None,         # Column where SIM should be written TO
     'item_number': None,        # Item/catalog number column (for SIM builder)
+    'supplier': None,           # Convenience single-value supplier column
 }
 
 
@@ -42,6 +44,12 @@ DEFAULT_COLUMN_ALIASES = {
         'Product Description', 'Line Description', 'Short Description',
         'MATNR_DESC', 'Mat Description', 'DESC', 'Desc',
         'Item Desc', 'Product Desc',
+        # v3: compressed short-text format (e.g. Wesco WESCO.xlsx)
+        'Short Text', 'SHORT TEXT', 'Short_Text', 'ShortText',
+        # v4: additional short/item text aliases
+        'Short Desc', 'SHORT DESC', 'Item Text', 'ITEM TEXT',
+        'Line Text', 'LINE TEXT', 'Mat Text', 'MAT TEXT',
+        'Material Text', 'MATERIAL TEXT',
     ],
     'source_po_text': [
         'Material PO Text', 'PO Text', 'PO_TEXT', 'Purchase Order Text',
@@ -70,6 +78,12 @@ DEFAULT_COLUMN_ALIASES = {
         'Item #', 'ITEM #', 'ITEM#', 'Item Number', 'Catalog #',
         'Cat #', 'CAT#', 'Stock Number', 'ITEM NUMBER',
     ],
+    # v3: supplier/vendor columns used as MFG fallback for Short Text files
+    'source_supplier': [
+        'Supplier Name1', 'Supplier Name 1', 'Supplier Name', 'Supplier',
+        'SUPPLIER', 'SUPPLIER NAME', 'SUPPLIER NAME1', 'Vendor Name',
+        'VENDOR NAME', 'Vendor', 'VENDOR',
+    ],
 }
 
 
@@ -78,10 +92,12 @@ DEFAULT_COLUMN_ALIASES = {
 # ═══════════════════════════════════════════════════════════════
 
 KEYWORD_FALLBACKS = {
-    'source_description': ['desc', 'material', 'text', 'long', 'product', 'item desc'],
+    'source_description': ['desc', 'material', 'text', 'long', 'product', 'item desc', 'short text'],
     'source_po_text': ['po', 'purchase', 'order text'],
     'source_notes': ['note', 'info', 'comment', 'remark'],
-    'mfg_output': ['mfg', 'manuf', 'brand', 'vendor', 'oem', 'mfr'],
+    'source_supplier': ['supplier', 'vendor name'],
+    'supplier': ['supplier', 'vendor'],
+    'mfg_output': ['mfg', 'manuf', 'brand', 'oem', 'mfr'],
     'pn_output': ['part', 'pn', 'model', 'catalog', 'cat no', 'part no'],
     'sim_output': ['sim'],
     'item_number': ['item', 'stock', 'catalog'],
@@ -115,10 +131,12 @@ def map_columns(df: pd.DataFrame, training_data: Optional[dict] = None) -> dict:
         'source_description': [],
         'source_po_text': [],
         'source_notes': [],
+        'source_supplier': [],
         'mfg_output': None,
         'pn_output': None,
         'sim_output': None,
         'item_number': None,
+        'supplier': None,
     }
 
     # Get available column names from DataFrame
@@ -185,6 +203,27 @@ def map_columns(df: pd.DataFrame, training_data: Optional[dict] = None) -> dict:
                 if keyword.lower() in col_lower:
                     _assign_column(result, role, col, assigned_columns)
                     break
+
+    # ── Step 5: Content validation for source_description columns ──
+    # Remove columns that are primarily numeric (SAP IDs, material numbers, quantities).
+    # These columns match keyword patterns (e.g. "material" in column name "Material") but
+    # contain numeric data, not parseable text descriptions.
+    validated_desc = []
+    for col in result.get('source_description', []):
+        if col not in df.columns:
+            continue
+        sample = df[col].dropna().head(50).astype(str)
+        if len(sample) == 0:
+            validated_desc.append(col)  # Keep empty columns; can't disqualify on no data
+            continue
+        text_ratio = sum(1 for v in sample if any(c.isalpha() for c in str(v))) / len(sample)
+        if text_ratio >= 0.3:  # At least 30% of sampled values contain letters
+            validated_desc.append(col)
+    result['source_description'] = validated_desc
+
+    # ── Convenience: populate single-value 'supplier' from source_supplier list ──
+    if result.get('supplier') is None and result.get('source_supplier'):
+        result['supplier'] = result['source_supplier'][0]
 
     return result
 
