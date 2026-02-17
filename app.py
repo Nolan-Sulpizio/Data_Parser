@@ -213,39 +213,37 @@ class WescoMROParser(ctk.CTk):
         )
         self.help_toggle_btn.pack(fill='x', padx=16, pady=(12, 4))
 
-        # Help content (initially hidden)
+        # Help content — packed immediately after toggle btn (hidden via pack_forget)
         self.help_panel = ctk.CTkFrame(self.sidebar, fg_color=BRAND['bg_input'], corner_radius=8)
         self.help_sections = {
-            "✍️ Writing Instructions": [
-                "• Be specific: 'Extract MFG from column A into column B'",
-                "• Mention source and destination columns",
-                "• Use column names or letters (A, B, C, etc.)",
+            "1️⃣  Import Your File": [
+                "Click the import zone or drag an Excel file in.",
+                "Supports .xlsx, .xls, and .csv formats.",
             ],
-            "📊 Preparing Your Data": [
-                "• Add EMPTY columns next to your source data",
-                "• Empty columns should be to the RIGHT",
-                "• One empty column per output (MFG, PN, etc.)",
-                "• Keep source data intact",
+            "2️⃣  Select Source Columns": [
+                "Check the columns that contain the text to parse.",
+                "Look for columns with descriptions or part info.",
+                "⭐ columns are auto-suggested — verify them.",
+                "Char counts on the right help identify text vs IDs.",
             ],
-            "💡 Tips & Best Practices": [
-                "• Name empty columns clearly (MFG, PN, SIM)",
-                "• Use Quick Templates for common tasks",
-                "• Check the 'Interpreted as' feedback",
-                "• Review Output preview before exporting",
+            "3️⃣  Choose Output Placement": [
+                "'At end' appends MFG + PN as new last columns.",
+                "'At front' inserts them as columns A–B.",
             ],
-            "⚠️ Common Mistakes": [
-                "• No empty columns for results",
-                "• Overwriting source data columns",
-                "• Vague instructions like 'extract data'",
-                "• Not specifying which columns to use",
+            "4️⃣  Run & Export": [
+                "Hit Run Parser — results appear in the preview.",
+                "Toggle Input/Output to compare before and after.",
+                "Export saves as CSV (opens directly in Excel).",
             ],
         }
+        # Don't pack help_panel yet — toggle will show it
 
         # Spacer to push version footer to bottom
-        ctk.CTkFrame(self.sidebar, fg_color='transparent').pack(fill='both', expand=True)
+        self._sidebar_spacer = ctk.CTkFrame(self.sidebar, fg_color='transparent')
+        self._sidebar_spacer.pack(fill='both', expand=True)
 
         # Version footer
-        version_label = ctk.CTkLabel(self.sidebar, text="v2.1.2  •  Wesco International  •  Global Accounts",
+        version_label = ctk.CTkLabel(self.sidebar, text="v4.0.0  •  Wesco International  •  Global Accounts",
                                       font=(BRAND['font_family'], 9),
                                       text_color=BRAND['text_muted'])
         version_label.pack(side='bottom', pady=12)
@@ -298,9 +296,8 @@ class WescoMROParser(ctk.CTk):
                     )
                     tip_label.pack(anchor='w', padx=8, pady=2, fill='x')
 
-            # Pack the help panel with explicit size
-            self.help_panel.pack(fill='both', padx=16, pady=(4, 8))
-            self.help_panel.configure(height=320)  # Set explicit height
+            # Pack immediately after the toggle button (not at end of sidebar)
+            self.help_panel.pack(after=self.help_toggle_btn, fill='both', padx=16, pady=(4, 8))
         else:
             self.help_toggle_btn.configure(text="📖  How to Use  ▼")
             self.help_panel.pack_forget()
@@ -393,6 +390,62 @@ class WescoMROParser(ctk.CTk):
         self.col_selector_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
         # Not packed yet — populated and packed by _refresh_column_selector() after file load
 
+        # ── Action buttons — PACKED BEFORE optional sections so they're always visible ──
+        action_frame = ctk.CTkFrame(view, fg_color='transparent')
+        action_frame.pack(fill='x', pady=(0, 8))
+
+        self.run_btn = ctk.CTkButton(
+            action_frame, text="▶  Run Parser", height=42, width=180,
+            font=(BRAND['font_family'], 14, 'bold'),
+            fg_color=BRAND['accent'], hover_color=BRAND['accent_hover'],
+            text_color=BRAND['bg_dark'], corner_radius=10,
+            command=self._run_parser,
+        )
+        self.run_btn.pack(side='left')
+
+        self.export_btn = ctk.CTkButton(
+            action_frame, text="💾  Export", height=42, width=140,
+            font=(BRAND['font_family'], 13),
+            fg_color=BRAND['bg_card'], hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_primary'], corner_radius=10,
+            border_color=BRAND['border'], border_width=1,
+            command=self._export_result, state='disabled',
+        )
+        self.export_btn.pack(side='left', padx=(12, 0))
+
+        self.save_config_btn = ctk.CTkButton(
+            action_frame, text="⚙ Save Config", height=42, width=140,
+            font=(BRAND['font_family'], 13),
+            fg_color=BRAND['bg_card'], hover_color=BRAND['bg_hover'],
+            text_color=BRAND['text_primary'], corner_radius=10,
+            border_color=BRAND['border'], border_width=1,
+            command=self._save_current_config, state='disabled',
+        )
+        self.save_config_btn.pack(side='left', padx=(12, 0))
+
+        # ── Progress ──
+        self.progress_bar = ctk.CTkProgressBar(view, fg_color=BRAND['bg_card'],
+                                                progress_color=BRAND['accent'],
+                                                height=4, corner_radius=2)
+        self.progress_bar.pack(fill='x', pady=(0, 4))
+        self.progress_bar.set(0)
+
+        # ── Status bar ──
+        self.status_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'],
+                                          corner_radius=8, height=36)
+        self.status_frame.pack(fill='x', pady=(0, 8))
+        self.status_frame.pack_propagate(False)
+
+        self.status_label = ctk.CTkLabel(self.status_frame, text="Ready — import a file to begin",
+                                          font=(BRAND['font_family'], 11),
+                                          text_color=BRAND['text_secondary'])
+        self.status_label.pack(side='left', padx=12)
+
+        self.stats_label = ctk.CTkLabel(self.status_frame, text="",
+                                         font=(BRAND['font_mono'], 11),
+                                         text_color=BRAND['accent'])
+        self.stats_label.pack(side='right', padx=12)
+
         # ── Advanced toggle + Instruction input ──
         self.advanced_toggle_btn = ctk.CTkButton(
             view, text="▸  Custom Instruction (Advanced)",
@@ -484,62 +537,6 @@ class WescoMROParser(ctk.CTk):
                 command=cmd,
             )
             chip.pack(side='left', padx=(0, 6))
-
-        # ── Action buttons ──
-        action_frame = ctk.CTkFrame(view, fg_color='transparent')
-        action_frame.pack(fill='x', pady=(0, 12))
-
-        self.run_btn = ctk.CTkButton(
-            action_frame, text="▶  Run Parser", height=42, width=180,
-            font=(BRAND['font_family'], 14, 'bold'),
-            fg_color=BRAND['accent'], hover_color=BRAND['accent_hover'],
-            text_color=BRAND['bg_dark'], corner_radius=10,
-            command=self._run_parser,
-        )
-        self.run_btn.pack(side='left')
-
-        self.export_btn = ctk.CTkButton(
-            action_frame, text="💾  Export", height=42, width=140,
-            font=(BRAND['font_family'], 13),
-            fg_color=BRAND['bg_card'], hover_color=BRAND['bg_hover'],
-            text_color=BRAND['text_primary'], corner_radius=10,
-            border_color=BRAND['border'], border_width=1,
-            command=self._export_result, state='disabled',
-        )
-        self.export_btn.pack(side='left', padx=(12, 0))
-
-        self.save_config_btn = ctk.CTkButton(
-            action_frame, text="⚙ Save Config", height=42, width=140,
-            font=(BRAND['font_family'], 13),
-            fg_color=BRAND['bg_card'], hover_color=BRAND['bg_hover'],
-            text_color=BRAND['text_primary'], corner_radius=10,
-            border_color=BRAND['border'], border_width=1,
-            command=self._save_current_config, state='disabled',
-        )
-        self.save_config_btn.pack(side='left', padx=(12, 0))
-
-        # ── Progress ──
-        self.progress_bar = ctk.CTkProgressBar(view, fg_color=BRAND['bg_card'],
-                                                progress_color=BRAND['accent'],
-                                                height=4, corner_radius=2)
-        self.progress_bar.pack(fill='x', pady=(0, 4))
-        self.progress_bar.set(0)
-
-        # ── Status bar ──
-        self.status_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'],
-                                          corner_radius=8, height=36)
-        self.status_frame.pack(fill='x', pady=(0, 12))
-        self.status_frame.pack_propagate(False)
-
-        self.status_label = ctk.CTkLabel(self.status_frame, text="Ready — import a file to begin",
-                                          font=(BRAND['font_family'], 11),
-                                          text_color=BRAND['text_secondary'])
-        self.status_label.pack(side='left', padx=12)
-
-        self.stats_label = ctk.CTkLabel(self.status_frame, text="",
-                                         font=(BRAND['font_mono'], 11),
-                                         text_color=BRAND['accent'])
-        self.stats_label.pack(side='right', padx=12)
 
         # ── Preview table ──
         self.preview_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
@@ -878,6 +875,8 @@ class WescoMROParser(ctk.CTk):
             self._refresh_column_selector()
 
             self.import_label.configure(text=f"✓  {filename}")
+            # Shrink import frame after load to reclaim vertical space
+            self.import_frame.configure(height=80)
             self.file_info_label.configure(
                 text=f"{len(self.df_input)} rows  •  {len(self.df_input.columns)} columns  •  "
                      f"Cols: {', '.join(self.df_input.columns[:6])}{'...' if len(self.df_input.columns) > 6 else ''}"
@@ -1064,8 +1063,11 @@ The parser understands phrases like:
                      text_color=BRAND['text_muted']).pack(side='left', padx=(8, 0))
 
         # ── Scrollable column list ──
+        # Dynamic height: cap at 130px so action buttons stay visible
+        n_cols = len(list(self.df_input.columns))
+        scroll_h = min(max(n_cols * 26, 80), 130)
         scroll = ctk.CTkScrollableFrame(self.col_selector_frame,
-                                         fg_color='transparent', height=180)
+                                         fg_color='transparent', height=scroll_h)
         scroll.pack(fill='x', padx=8, pady=4)
 
         # Column preview label (updated on click)
