@@ -212,6 +212,21 @@ BARE_SPEC_TOKENS = {
     'GRN', 'BLU', 'YEL', 'GRY', 'BRN', 'EA', 'AU',
 }
 
+# ── P2: Non-product row patterns — rows whose text exactly matches these get no MFG/PN ──
+NON_PRODUCT_PATTERNS = frozenset({
+    'FREIGHT', 'FREIGHT CHARGE', 'FREIGHT CHARGES', 'FREIGHT COST',
+    'SHIPPING', 'SHIPPING CHARGE', 'SHIPPING CHARGES', 'SHIPPING COST',
+    'HANDLING', 'HANDLING CHARGE', 'HANDLING FEE', 'HANDLING COST',
+    'SERVICE FEE', 'SERVICE CHARGE', 'SERVICE COST',
+    'ADMIN CHARGE', 'ADMINISTRATIVE CHARGE',
+    'TAX', 'SALES TAX', 'USE TAX', 'EXCISE TAX',
+    'MISC', 'MISCELLANEOUS', 'MISCELLANEOUS CHARGE',
+    'LABOR', 'LABOR CHARGE', 'LABOUR', 'LABOUR CHARGE',
+    'INSTALLATION', 'INSTALLATION CHARGE', 'SETUP', 'SETUP CHARGE',
+    'DISCOUNT', 'REBATE', 'CREDIT', 'ADJUSTMENT',
+    'SURCHARGE', 'FUEL SURCHARGE', 'ENERGY SURCHARGE',
+})
+
 # ── v3.1: Descriptor-pattern PN rejection (Fix 4) ────────────────────────────
 # Tokens matching NUMBER-DESCRIPTOR patterns are NOT part numbers
 # v3.4: Dash made optional so "2BOLT", "4BOLT" are also rejected (not just "2-BOLT")
@@ -429,6 +444,35 @@ def _is_plant_code(tok: str) -> bool:
     e.g. 'N141', 'N041', 'T141'.  These must never be used as part numbers.
     """
     return bool(re.match(r'^[A-Z]\d{3,4}$', tok))
+
+
+def is_non_product_row(texts: list) -> bool:
+    """
+    P2: Return True if this row is a non-product entry (freight, service charge,
+    admin line, etc.) that should not receive MFG/PN extraction.
+
+    Avoids filling MFG/PN for overhead line items like FREIGHT, LABOR, TAX,
+    DISCOUNT, MISC, etc. Only fires when the row text is an exact match to a
+    known non-product keyword (whole text or first comma-token) — no partial
+    matching to avoid accidentally skipping legitimate product rows.
+
+    Checks:
+      - Combined non-blank source text exactly matches a NON_PRODUCT_PATTERNS entry
+      - OR the first comma-token of the combined text matches a NON_PRODUCT_PATTERNS entry
+    """
+    non_empty = [
+        str(t).strip() for t in texts
+        if str(t).strip() not in ('', 'nan', 'None', 'NaN')
+    ]
+    if not non_empty:
+        return False  # blank row — let natural logic handle it
+    combined = ', '.join(non_empty).upper().strip()
+    if combined in NON_PRODUCT_PATTERNS:
+        return True
+    first_token = combined.split(',')[0].strip()
+    if first_token in NON_PRODUCT_PATTERNS:
+        return True
+    return False
 
 
 def _score_heuristic_pn(candidate: str) -> float:
@@ -1365,6 +1409,18 @@ def pipeline_mfg_pn(
     for idx, row in df.iterrows():
         texts = [str(row.get(c, '')) for c in source_cols if c in df.columns]
         combined_text = ' | '.join(t for t in texts if t.strip())
+
+        # P2: Skip non-product rows only when there is no supplier fallback available.
+        # Rows with a non-blank supplier are still processed so supplier_fallback
+        # can record the correct MFG (e.g. shipping row with supplier=ULINE → MFG=ULINE).
+        if is_non_product_row(texts):
+            supplier_val = (
+                str(row.get(supplier_col, '')).strip()
+                if supplier_col and supplier_col in df.columns
+                else ''
+            )
+            if supplier_val in ('', 'nan', 'None', 'NaN'):
+                continue
 
         # ── Collect ALL PN candidates ──
         pn_candidates = []
