@@ -1,157 +1,123 @@
-# CLAUDE.md — Wesco MRO Data Parser (Rebrand & Polish)
+# CLAUDE.md — Wesco MRO Parser
 
-## Project Context
-This is an existing desktop application (`mro-parser/`) that parses MRO Excel data — extracting Manufacturer (MFG), Part Number (PN), and SIM values from unstructured product descriptions. The app was prototyped under "Clean Plate" branding but is actually a **Wesco International** internal tool built by Nolan Sulpizio on the Global Accounts team.
+**Status:** Production-ready, v4.0.0. Wesco branding complete.
+**Owner:** Nolan Sulpizio — Wesco International, Global Accounts
+**Constraint:** 100% offline. No API keys, no internet. Mac + Windows.
 
-**The app already works.** The parsing engine, instruction parser, history DB, and GUI are all functional. This task is to **rebrand, polish, and prepare for team distribution**.
+---
 
-## Testing
-The project includes a comprehensive test suite in `tests/`:
-- `run_validation.py` — Full 6-phase validation suite (accuracy, QA, unit, scale, normalization, edge cases)
-- `test_quick.py` — Fast smoke tests for development
-- `run_tests.sh` — Quick test runner script
+## What This App Does
 
-Run tests: `./run_tests.sh` (quick) or `./run_tests.sh full` (complete validation)
+Parses MRO Excel data to extract **Manufacturer (MFG)**, **Part Number (PN)**, and **SIM** values from unstructured product descriptions. Rule-based engine with training data — no LLM at runtime.
 
-Test data location: `/Users/nolansulpizio/Desktop/Documents - Nolan's MacBook Pro/WESCO/Data Parse Agent/Data Context/`
+---
 
-See `TEST_INSTRUCTIONS.md` for detailed testing documentation.
+## Key Files
 
-## Primary Objectives
+| File | Purpose |
+|------|---------|
+| `app.py` | Main GUI (CustomTkinter), Wesco-branded, ~1,600 lines |
+| `engine/parser_core.py` | Core extraction logic — MFG/PN pipelines, confidence scoring |
+| `engine/schema_classifier.py` | Detects file schema (SAP_SHORT_TEXT, GENERIC, etc.) |
+| `engine/file_profiler.py` | Column analysis & file archetype detection |
+| `engine/column_mapper.py` | Column mapping, preprocessing, `suggest_columns()` |
+| `engine/instruction_parser.py` | Parses free-text instructions (secondary input path) |
+| `engine/history_db.py` | SQLite job history — stored in `~/.wesco_mro_parser/` |
+| `engine/training.py` | Training data ingestion utilities |
+| `training_data.json` | `mfg_normalization` map + `known_manufacturers` list |
 
-### 1. REBRAND: Clean Plate → Wesco
-Replace ALL Clean Plate references with Wesco branding:
+---
 
-**Brand Colors (from Wesco corporate identity):**
-- Primary Green: `#009639` (Wesco's signature green)
-- Dark Green: `#006B2D`
-- Light Green: `#4CAF50` (hover/accent)
-- Dark Background: `#0D1117` (modern dark theme)
-- Card Background: `#161B22`
-- Input Background: `#21262D`
-- Text Primary: `#F0F6FC`
-- Text Secondary: `#8B949E`
-- Text Muted: `#6E7681`
-- Border: `#30363D`
-- Warning: `#D29922`
-- Error: `#F85149`
+## Engine Architecture (v4.0.0)
 
-**Naming:**
-- App title: `"Wesco MRO Parser"` (window title bar)
-- Sidebar logo text: `"WESCO"` with subtitle `"MRO Data Parser"`
-- Logo icon: Use a bold green "W" character or the Unicode `◆` in Wesco green
-- Internal class name: `WescoMROParser` (rename from `CleanPlateParser`)
-- Database file: `wesco_mro_history.db` (rename from `clean_plate_history.db`)
-- App data directory: `~/.wesco_mro_parser/` (rename from `~/.clean_plate_parser/`)
-- Version footer: `"v2.0.0 • Wesco International • Global Accounts"`
-- Build output name: `"WescoMROParser"` (for pyinstaller)
-- README title: `"Wesco MRO Parser"`
+**Primary input:** Column-first selector — user picks source columns via `suggest_columns()`, zero-ambiguity routing in `_execute_pipeline()`.
+**Secondary input:** Free-text instructions via `instruction_parser.py` (Advanced/collapsible).
 
-**Files to update:**
-- `app.py` — all BRAND colors, class names, text labels, window title
-- `engine/__init__.py` — module docstring
-- `engine/history_db.py` — DB_NAME, app directory path
-- `build_windows.bat` — exe name, echo messages
-- `README.md` — all references
-- `requirements.txt` — no changes needed
+**MFG/PN pipeline** (`pipeline_mfg_pn()` in `parser_core.py`):
+- Multi-strategy extraction with confidence scoring
+- Schema detection: `SAP_SHORT_TEXT` for WESCO files (Short Text + Supplier Name columns)
+- File archetype: `MIXED` for standard WESCO data
+- Confidence threshold: ~0.412 for SAP_SHORT_TEXT+MIXED
 
-### 2. UI IMPROVEMENTS
-While rebranding, make these UI upgrades:
+**NORMALIZE_MFG** overrides (in `parser_core.py`): handles SAP short-text truncations.
+Examples: `SEW EURODR` → `SEW EURODRIVE`, `BRU FOLC` → `BRUNO FOLCIERI`
 
-**Sidebar:**
-- Replace the `◉` logo with a bold styled "W" in Wesco green (`#009639`)
-- Make Quick Templates more visually distinct with small icons/emojis
-- Add a "Help" or "About" section at the bottom of sidebar
+**Wesco benchmark (2,684 rows):** MFG 60.5%, PN 59.3%. Zero hallucinations, zero spec/plant code leaks.
 
-**Import Zone:**
-- Add a dashed border style to the drop zone (use `border_width=2`)
-- Show column preview as pills/tags after file load
-- Better visual feedback on hover (subtle background shift)
-
-**Instruction Input:**
-- Add a small "?" tooltip or hint text explaining what instructions are supported
-- Show the interpretation feedback in a more styled badge/chip format
-- Placeholder text should read: `"Describe what you need, e.g. 'Extract MFG and PN from Material Description into columns A and B'"`
-
-**Preview Table:**
-- Highlight changed/filled cells in light green when showing Output view
-- Add row count badge in the preview header
-
-**Status Bar:**
-- Use color-coded status indicators (green dot = ready, yellow = processing, red = error)
-- Show elapsed processing time
-
-### 3. ENGINE — NO CHANGES NEEDED
-The parsing engine (`engine/parser_core.py`, `engine/instruction_parser.py`) is stable and tested. **Do not modify the parsing logic.** Only update branding strings if any exist in the engine files.
-
-### 4. DISTRIBUTION PREP
-**Windows .exe build:**
-- Update `build_windows.bat` with Wesco naming
-- Ensure pyinstaller bundles all customtkinter assets
-- The .exe should be named `WescoMROParser.exe`
-
-**macOS support (new):**
-- Add a `build_mac.sh` script that uses pyinstaller on macOS
-- Output should be `WescoMROParser.app` or a standalone binary
-
-**Add an app icon:**
-- Create a simple `.ico` file (Windows) and `.icns` file (macOS) 
-- Use a green "W" on dark background as the icon
-- Reference in pyinstaller with `--icon=assets/icon.ico`
-- Create an `assets/` directory for icon files
-
-### 5. ADDITIONAL FEATURES (if time permits)
-- **Batch mode:** Allow importing multiple Excel files and processing them sequentially
-- **Config export/import:** Let users export their saved configs as JSON to share with teammates
-- **Dark/Light mode toggle:** Add a theme switch in the sidebar (default: dark)
-
-## File Structure (Target)
-```
-mro-parser/
-├── CLAUDE.md                      ← this file
-├── app.py                         ← Main UI (REBRAND HERE)
-├── engine/
-│   ├── __init__.py                ← Update version/docstring
-│   ├── parser_core.py             ← DO NOT MODIFY LOGIC
-│   ├── instruction_parser.py      ← DO NOT MODIFY LOGIC  
-│   └── history_db.py              ← Rename DB paths
-├── assets/
-│   ├── icon.ico                   ← Windows icon (green W)
-│   └── icon.icns                  ← macOS icon (green W)
-├── build_windows.bat              ← Updated for Wesco
-├── build_mac.sh                   ← NEW - macOS build script
-├── requirements.txt
-└── README.md                      ← Updated for Wesco
-```
-
-## Implementation Order
-1. Create `assets/` directory and generate icon files
-2. Update `app.py` — rebrand all colors, labels, class names
-3. Update `engine/history_db.py` — rename DB paths
-4. Update `engine/__init__.py` — version bump and docstring
-5. Update `build_windows.bat` — Wesco naming
-6. Create `build_mac.sh` — new macOS build script
-7. Update `README.md` — comprehensive Wesco documentation
-8. Apply UI improvements (sidebar, import zone, status bar)
-9. Test: `python app.py` should launch with full Wesco branding
-10. Build: run build script to generate distributable
+---
 
 ## Testing
-After all changes, verify:
-- [ ] App launches without errors (`python app.py`)
-- [ ] Window title says "Wesco MRO Parser"
-- [ ] Sidebar shows green "W" logo and "WESCO" text
-- [ ] All three Quick Templates work (MFG+PN, Part Number, SIM)
-- [ ] File import works (.xlsx, .csv)
-- [ ] Processing runs and shows results in preview
-- [ ] Export saves cleaned workbook
-- [ ] History view shows past jobs
-- [ ] No references to "Clean Plate" anywhere in the UI
-- [ ] Build script produces `WescoMROParser.exe` (Windows) or equivalent
 
-## Important Notes
-- This is an INTERNAL Wesco tool, not a commercial product
-- Keep it 100% offline — no API keys, no internet required
-- The three parsing pipelines (MFG/PN, Part Number, SIM) come from specs written by Nolan Sulpizio and should not be modified
-- Target users are the Global Accounts BDA team — keep the UI simple and clear
-- Mac + Windows support required since the team uses both platforms
+```bash
+./run_tests.sh          # quick smoke tests
+./run_tests.sh full     # full 6-phase validation
+```
+
+Test files in `tests/`. Test data in `test_data/` (gitignored — add your own files).
+Copy `test_config.example.json` → `test_config.json` and set local paths before running.
+See `docs/TESTING_GUIDE.md` for full documentation.
+
+---
+
+## Training Data Rules
+
+`training_data.json` contains:
+- `mfg_normalization` — abbreviation → full manufacturer name
+- `known_manufacturers` — validated manufacturer list
+
+**Critical validation gate:** Never add a key to `mfg_normalization` that matches any entry in the `DISTRIBUTORS` set in `parser_core.py`. The v4.0.0 patch removed 8 contaminated entries (GRAINGER → FEDERAL SIGNAL, generic descriptors, spec phrases) caused by this exact failure mode.
+
+---
+
+## Common Failure Patterns
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Hallucinated AB/TE/GE as MFG | Toxic training data | Audit `mfg_normalization` |
+| `N141` / `N041` appearing as PN | Plant column in `source_cols` | Check `_is_plant_code()` |
+| Truncated MFG names (SEW EURODR, BRU FOLC) | SAP 18-char limit | Add to `NORMALIZE_MFG` |
+| ABB drive PNs missing (3AXD*) | Pure alphanumeric, no separator | `extract_pn_embedded_code()` handles this |
+| Distributor name as MFG | Key in both `mfg_normalization` and `DISTRIBUTORS` | Remove from normalization map |
+
+---
+
+## What NOT to Change
+
+- **Engine logic** (`parser_core.py`, `instruction_parser.py`) — stable and tested
+- **Parsing pipelines** (MFG/PN, Part Number, SIM) — specs in `docs/`
+
+---
+
+## Brand Colors (Wesco)
+
+```
+Primary Green:   #009639   Dark Green:  #006B2D   Hover:    #4CAF50
+Background:      #0D1117   Card:        #161B22   Input:    #21262D
+Text:            #F0F6FC   Secondary:   #8B949E   Muted:    #6E7681
+Border:          #30363D   Warning:     #D29922   Error:    #F85149
+```
+
+---
+
+## Build
+
+```bash
+./build_mac.sh        # → WescoMROParser.app
+build_windows.bat     # → WescoMROParser.exe
+```
+
+Icons: `assets/icon.icns` (macOS), `assets/icon.ico` (Windows).
+
+---
+
+## Docs
+
+| File | Content |
+|------|---------|
+| `MFG_PN_Parsing_Agent_Spec.md` | MFG+PN pipeline requirements |
+| `MRO_Part_Number_Processing_Spec.md` | Part number pipeline spec |
+| `SIM_BOM_Automation_Spec.md` | SIM extraction spec |
+| `TESTING_GUIDE.md` | Full test documentation |
+| `ENGINE_REFINEMENT_v3.2.md` | Historical engine refinements |
+| `UI_PIPELINE_FIX.md` | Historical UI/pipeline notes |
+| `GAMMA_PRESENTATION_METRICS.md` | Benchmarks for presentations |
