@@ -1576,17 +1576,29 @@ def pipeline_mfg_pn(
                     'source': best_pn_src,
                 })
 
-    # Tidy formatting
+    # Tidy formatting — P4: Universal output normalization
+    def _normalize_mfg_output(s):
+        """Normalize MFG for final output: apply NORMALIZE_MFG, strip trailing punctuation."""
+        if not pd.notna(s) or str(s).strip() in ('', 'nan', 'None', 'NaN'):
+            return s
+        v = re.sub(r"\s+", " ", str(s).strip().upper())
+        v = NORMALIZE_MFG.get(v, v)         # exact-match normalization
+        v = v.rstrip('.,;:').strip()        # strip trailing punctuation artifacts
+        v = re.sub(r"\s+", " ", v)         # collapse any whitespace introduced by strip
+        return v
+
+    def _normalize_pn_output(s):
+        """Normalize PN for final output: uppercase, remove all whitespace, strip punctuation."""
+        if not pd.notna(s) or str(s).strip() in ('', 'nan', 'None', 'NaN'):
+            return s
+        v = re.sub(r"\s+", "", str(s).strip().upper())  # remove all whitespace
+        v = v.strip('.,;:')                              # strip edge punctuation
+        return v
+
     if mfg_col in df.columns:
-        df[mfg_col] = df[mfg_col].apply(
-            lambda s: re.sub(r"\s+", " ", NORMALIZE_MFG.get(str(s).strip().upper(), str(s).strip().upper()))
-            if pd.notna(s) and str(s).strip() not in ('', 'nan', 'None', 'NaN') else s
-        )
+        df[mfg_col] = df[mfg_col].apply(_normalize_mfg_output)
     if pn_col in df.columns:
-        df[pn_col] = df[pn_col].apply(
-            lambda s: re.sub(r"\s+", "", str(s).strip().upper())
-            if pd.notna(s) and str(s).strip() not in ('', 'nan', 'None', 'NaN') else s
-        )
+        df[pn_col] = df[pn_col].apply(_normalize_pn_output)
 
     # ── Step 4: Post-extraction validation ────────────────────────────────────
     validation_corrections = []
