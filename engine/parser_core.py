@@ -1773,3 +1773,44 @@ def run_qa(df: pd.DataFrame, mfg_col: str = 'MFG') -> list:
             except Exception:
                 pass
     return issues
+
+
+def parse_single_row(
+    source_text: str,
+    supplier_hint: Optional[str] = None,
+) -> tuple:
+    """
+    Parse a single source text string and return (mfg, pn).
+
+    Thin wrapper around pipeline_mfg_pn for one row — used by the V5 UI
+    smart preview to show sample parsed results before committing to a
+    full file run.
+
+    Args:
+        source_text: The raw text to parse (e.g. SAP short text value)
+        supplier_hint: Optional supplier/vendor name used as MFG fallback
+
+    Returns:
+        (mfg, pn) — either may be None if extraction failed
+    """
+    df = pd.DataFrame({'_text': [source_text]})
+    sup_col = None
+    if supplier_hint:
+        df['_supplier'] = [supplier_hint]
+        sup_col = '_supplier'
+
+    try:
+        result = pipeline_mfg_pn(
+            df,
+            source_cols=['_text'],
+            supplier_col=sup_col,
+            add_sim=False,
+        )
+        row = result.df.iloc[0]
+        mfg = str(row.get('MFG', '')).strip()
+        pn = str(row.get('PN', '')).strip()
+        mfg = mfg if mfg not in ('', 'nan', 'None') else None
+        pn = pn if pn not in ('', 'nan', 'None') else None
+        return mfg, pn
+    except Exception:
+        return None, None

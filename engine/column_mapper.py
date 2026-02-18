@@ -368,6 +368,107 @@ def suggest_columns(df: pd.DataFrame, mapping: Optional[dict] = None) -> dict:
     return suggestions
 
 
+def score_column_for_parsing(col_name: str, sample_values: list) -> float:
+    """
+    Score 0-100 how likely a column contains parseable MFG/PN data.
+
+    Used by the V5 UI to auto-select source columns and filter out noise
+    (plant codes, dates, quantities, unnamed columns with numeric data).
+
+    Returns a score 0-100:
+        > 40 → auto-check as source column
+        10-40 → show in selector but unchecked
+        < 10  → hide from selector entirely
+    """
+    score = 0
+    name_lower = col_name.lower().strip()
+
+    # High-confidence description column names
+    high_signal = [
+        'short text', 'description', 'long text', 'material description',
+        'item description', 'part description', 'material text', 'item text',
+        'line text', 'mat text',
+    ]
+    # Medium-confidence names
+    medium_signal = ['material', 'product', 'part', 'desc', 'text', 'item']
+
+    # Explicit exclusions — these columns never contain parseable MFG/PN text
+    exclude_signal = [
+        'plant', 'date', 'org', 'purch', 'qty', 'quantity', 'unit price',
+        'uom', 'price', 'cost', 'total', 'currency', 'amount', 'number of',
+        'doc.', 'document', 'storage', 'del.', 'delivery',
+    ]
+
+    has_positive_name = False
+    excluded = False
+
+    for sig in high_signal:
+        if sig in name_lower:
+            score += 50
+            has_positive_name = True
+            break
+
+    if not has_positive_name:
+        for sig in medium_signal:
+            if sig in name_lower:
+                score += 25
+                has_positive_name = True
+                break
+
+    # Apply exclusion penalty (only when no positive name signal fired)
+    if not has_positive_name:
+        for sig in exclude_signal:
+            if sig in name_lower:
+                score = 0
+                excluded = True
+                break
+
+    # "Unnamed" columns rely purely on content (no name bonus)
+    if 'unnamed' in name_lower:
+        score = 0
+
+    # Content scoring — only applied when column is not explicitly excluded
+    if not excluded:
+        samples = [
+            str(v) for v in sample_values[:20]
+            if pd.notna(v) and str(v).strip() not in ('', 'nan', 'None')
+        ]
+        if samples:
+            avg_len = sum(len(s) for s in samples) / len(samples)
+            text_pct = sum(1 for s in samples if any(c.isalpha() for c in s)) / len(samples)
+
+            if avg_len > 15:
+                score += 20
+            if text_pct > 0.7:
+                score += 15
+
+            # Mixed alphanumeric (typical of MRO descriptions and part numbers)
+            mixed_count = sum(
+                1 for s in samples
+                if any(c.isalpha() for c in s) and any(c.isdigit() for c in s)
+            )
+            if mixed_count / len(samples) > 0.3:
+                score += 10
+
+    return min(score, 100)
+
+
+def detect_supplier_column(columns: list) -> str | None:
+    """
+    Return the first column name that looks like a supplier/vendor column.
+    Used by the V5 UI to auto-detect the MFG fallback column.
+    """
+    supplier_signals = [
+        'supplier', 'vendor', 'vendor name', 'supplier name',
+        'mfg name', 'manufacturer name',
+    ]
+    for col in columns:
+        col_lower = col.lower().strip()
+        if any(sig in col_lower for sig in supplier_signals):
+            return col
+    return None
+
+
 def format_mapping_summary(mapping: dict) -> str:
     """
     Generate a human-readable summary of the column mapping.
