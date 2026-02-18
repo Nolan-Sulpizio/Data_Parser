@@ -1402,6 +1402,7 @@ def pipeline_mfg_pn(
     mfg_filled = 0
     pn_filled = 0
     low_confidence_flags = []
+    pn_not_in_source_flags = []   # P3: rows where extracted PN is not found in source text
     mfg_confidences = []
     pn_confidences = []
 
@@ -1561,6 +1562,13 @@ def pipeline_mfg_pn(
                 df.at[idx, pn_col] = pn_final
                 pn_filled += 1
                 pn_confidences.append(best_pn_conf)
+                # P3: Flag if extracted PN is not found verbatim in any source column
+                pn_in_source = any(
+                    pn_final.upper() in str(row.get(c, '')).upper()
+                    for c in source_cols if c in df.columns
+                )
+                if not pn_in_source:
+                    pn_not_in_source_flags.append(idx)
             elif pn_final and best_pn_conf > 0:
                 low_confidence_flags.append({
                     'row': idx, 'field': 'PN',
@@ -1584,6 +1592,15 @@ def pipeline_mfg_pn(
     validation_corrections = []
     if auto_validate:
         df, validation_corrections = validate_and_clean(df, mfg_col=mfg_col, pn_col=pn_col)
+
+    # ── Step P3: PN_NOT_IN_SOURCE flag column ─────────────────────────────────
+    # Marks rows where the extracted PN was not found verbatim in the source text.
+    # Useful for QA — flags potential hallucinations or composite-code decodes.
+    if pn_not_in_source_flags:
+        if 'PN_FLAGS' not in df.columns:
+            df['PN_FLAGS'] = ''
+        for flag_idx in pn_not_in_source_flags:
+            df.at[flag_idx, 'PN_FLAGS'] = 'NOT_IN_SOURCE'
 
     # ── Step 5: SIM generation ────────────────────────────────────────────────
     sim_filled = 0
