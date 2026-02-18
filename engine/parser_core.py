@@ -1537,6 +1537,21 @@ def pipeline_mfg_pn(
         # Pick best MFG
         best_mfg, best_mfg_src, best_mfg_conf = pick_best(mfg_candidates, strategy_weights)
 
+        # P5: Cross-validate supplier-derived MFG against description text.
+        # If supplier_fallback won but a DIFFERENT valid known manufacturer appears in the
+        # source text, prefer the description-sourced one — text is the purchase record.
+        if best_mfg_src == 'supplier_fallback':
+            for t in texts:
+                desc_mfg, _, desc_conf = extract_mfg_known(t, known_mfgs)
+                if desc_mfg and desc_mfg.upper() != (best_mfg or '').upper():
+                    desc_sanitized = sanitize_mfg(desc_mfg)
+                    if desc_sanitized:
+                        weighted_desc = desc_conf * strategy_weights.get('known_mfg', 1.0)
+                        best_mfg = desc_sanitized
+                        best_mfg_src = 'known_mfg_p5'
+                        best_mfg_conf = weighted_desc
+                        break
+
         # Sanitize MFG
         mfg_final = sanitize_mfg(best_mfg) if best_mfg else None
         pn_final = best_pn
