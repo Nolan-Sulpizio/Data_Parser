@@ -82,7 +82,8 @@ NORMALIZE_MFG.update({
     'ACME ELE': 'ACME ELECTRIC',
     'BRUNO FOLCUERI': 'BRUNO FOLCIERI',   # typo variant
     'PAAL BALER': 'PAAL',
-    'REGAL REXNORD': 'REGAL REXNORD',
+    # v3.6: SAP-truncated brand names found in WESCO compressed Short Text
+    'SEW EURO': 'SEW EURODRIVE',
 })
 
 KNOWN_MANUFACTURERS = set(_training.get('known_manufacturers', []))
@@ -99,13 +100,18 @@ KNOWN_MANUFACTURERS.update({
     'TSUBAKI', 'IDEC', 'LENZE', 'TRAVAINI', 'MARATHON', 'ERIEZ', 'BALDOR',
     'NORD', 'SMC', 'BONFIGLIOLI', 'REGAL REXNORD', 'HYDRAFORCE', 'DUPLOMATIC',
     'WENGLOR', 'VORTEX', 'OMAL', 'ACME ELECTRIC', 'WESTINGHOUSE', 'PAAL',
+    # v3.6: SAP-truncated brand abbreviations found in WESCO Short Text
+    'SEW EURODR', 'SEW EURO',
+    'ULINE',                              # ULINE is both supplier and brand for packaging goods
 })
 
 DISTRIBUTORS = {
     'GRAYBAR', 'CED', 'MC- MC', 'MC-MC', 'MCNAUGHTON-MCKAY', 'EISI',
     # v3: additional distributors for Short Text format files
     'MCMASTER-CARR', 'MCMASTER-CARR SUPPLY CO.', 'MCMASTER',
-    'ULINE', 'APPLIED INDUSTRIAL TECHNOLOGIE', 'APPLIED INDUSTRIAL TECHNOLOGIES',
+    # NOTE: ULINE removed from distributors — ULINE IS the brand for its packaging products.
+    # When Supplier = ULINE, supplier_fallback correctly returns MFG = ULINE.
+    'APPLIED INDUSTRIAL TECHNOLOGIE', 'APPLIED INDUSTRIAL TECHNOLOGIES',
     'MAYER ELECTRIC', 'MAYER ELECTRIC SUPPLY',
     'BEARING & DRIVE SUPPLY', 'NATIONAL RECOVERY TECHNOLOGIES',
     'MG AUTOMATION', 'MG AUTOMATION & CONTROLS',
@@ -256,6 +262,7 @@ CONFIDENCE_SCORES = {
     'pn_trailing_catalog': 0.68,  # v3.2: Trailing code in DESC,DESC,CATALOG format (Fix 1)
     'pn_trailing_numeric': 0.50,  # v3.2: Trailing pure-numeric code ≥7 digits (Fix 5)
     'pn_first_token_catalog': 0.68,  # v3.4: First token is catalog number (CATALOG, description)
+    'pn_embedded_code': 0.72,        # v3.6: Long alphanumeric code embedded in comma-delimited list
 
     # MFG extraction sources
     'mfg_label': 0.95,          # MANUFACTURER: explicit label
@@ -371,12 +378,23 @@ def _is_spec_value(tok: str) -> bool:
         or tok in BARE_SPEC_TOKENS
         or re.match(r"\d+/?\d*IN$", tok) is not None
         or (len(tok) <= 2 and re.match(r'^[A-Z]+$', tok))
+        or _is_plant_code(tok)           # v3.6: reject SAP plant/org codes (N141, N041, T141)
     )
 
 
 def _is_descriptor_pn(tok: str) -> bool:
     """Return True if token is a descriptor-pattern false PN (e.g. '3-WAY', '4-BOLT'). (Fix 4)"""
     return bool(PN_DESCRIPTOR_PATTERNS.match(tok))
+
+
+def _is_plant_code(tok: str) -> bool:
+    """
+    Return True if token looks like a SAP plant/purchasing-org code.
+
+    Plant codes in WESCO SAP data follow the pattern: one letter + 3-4 digits,
+    e.g. 'N141', 'N041', 'T141'.  These must never be used as part numbers.
+    """
+    return bool(re.match(r'^[A-Z]\d{3,4}$', tok))
 
 
 def _score_heuristic_pn(candidate: str) -> float:
@@ -677,6 +695,56 @@ def extract_pn_first_token_catalog(text: str) -> tuple:
         return None, 'none', 0.0
 
     return first, 'first_token_catalog', CONFIDENCE_SCORES['pn_first_token_catalog']
+
+
+def extract_pn_embedded_code(text: str) -> tuple:
+    """
+    v3.6 — Extract PN from a long alphanumeric code embedded in comma-delimited text.
+
+    Targets drive/module/unit part numbers that appear as a middle token in a comma
+    list, not first and not last:
+        'DRV,3AXD50000731121,5HP,480V,BAGGING'  → PN='3AXD50000731121'
+        'MODULE,ABB123456789AB,2-DI,2-DI/O'     → PN='ABB123456789AB'
+
+    The ≥10-char length gate keeps short spec codes (M12X40, L150N, 3PH)
+    from firing while still catching typical 10-16 char drive part numbers.
+
+    Validation gates (middle tokens only — not first, not last):
+      - Both letters AND digits present
+      - No spaces (pure code token, not a description phrase)
+      - Length ≥ 10 chars
+      - Not a spec value, descriptor pattern, or plant code
+      - Not starting with an INVALID_PN_PREFIX
+
+    Returns the longest qualifying candidate.
+    Returns (pn, 'embedded_code', 0.72) or (None, 'none', 0.0).
+    """
+    if not text:
+        return None, 'none', 0.0
+    t = str(text).strip().upper()
+    tokens = [tok.strip() for tok in t.split(',')]
+    if len(tokens) < 3:   # need at least: descriptor, code, something-else
+        return None, 'none', 0.0
+
+    middle_tokens = tokens[1:-1]
+    candidates = []
+    for tok in middle_tokens:
+        if ' ' in tok:                                     # reject phrase tokens
+            continue
+        if not (re.search(r'[A-Z]', tok) and re.search(r'[0-9]', tok)):
+            continue
+        if len(tok) < 10:                                  # length gate
+            continue
+        if _is_spec_value(tok) or _is_descriptor_pn(tok):
+            continue
+        if any(tok.startswith(p) for p in INVALID_PN_PREFIXES):
+            continue
+        candidates.append(tok)
+
+    if candidates:
+        best = max(candidates, key=len)
+        return best, 'embedded_code', CONFIDENCE_SCORES['pn_embedded_code']
+    return None, 'none', 0.0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1244,6 +1312,11 @@ def pipeline_mfg_pn(
             pn, src, conf = extract_pn_first_token_catalog(t)
             if pn:
                 pn_candidates.append(ExtractionCandidate(pn, 'first_token_catalog', conf))
+
+            # v3.6: Embedded long alphanumeric code in comma-delimited list (e.g. ABB drives)
+            pn, src, conf = extract_pn_embedded_code(t)
+            if pn:
+                pn_candidates.append(ExtractionCandidate(pn, 'embedded_code', conf))
 
         # Strategy: prefix decode (from first token)
         prefix_mfg, prefix_pn = decode_mfg_prefix(combined_text)

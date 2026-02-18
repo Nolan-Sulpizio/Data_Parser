@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy this file to test_config.json and adjust paths for your machine. test_config.json is gitignored.",
+  "_instructions": [
+    "Paths can be absolute or relative to the repo root.",
+    "Set 'data_dir' if all three test files live in the same directory.",
+    "Set individual entries under 'files' to override per-file paths (e.g. when files are in subdirectories).",
+    "Individual 'files' entries take precedence over 'data_dir'."
+  ],
+  "data_dir": "Data Parse Agent/Data Context",
+  "files": {
+    "electrical_blank":    "Data Parse Agent/Data Context/Data Set 1/Electrical PN_MFG Search_NOT COMPLETE.XLSX",
+    "electrical_complete": "Data Parse Agent/Data Context/Data Set 1/Electrical PN_MFG Search_COMPLETE.xlsx",
+    "book25":              "Data Parse Agent/Data Context/Book25.xlsx"
+  }
+}

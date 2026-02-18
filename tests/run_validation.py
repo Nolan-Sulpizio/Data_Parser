@@ -34,12 +34,73 @@ from engine.parser_core import (
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 
-DEFAULT_DATA_DIR = "/Users/nolansulpizio/Desktop/Documents - Nolan's MacBook Pro/WESCO/Data Parse Agent/Data Context"
+_REPO_ROOT = Path(__file__).parent.parent
 
-# Test file names
-ELECTRICAL_BLANK    = "Electrical PN_MFG Search.XLSX"
-ELECTRICAL_COMPLETE = "Electrical PN_MFG Search_COMPLETE.xlsx"
-BOOK25              = "Book25.xlsx"
+# Default fallback filenames (relative to data_dir) — used when no config overrides them
+_DEFAULT_ELECTRICAL_BLANK    = "Electrical PN_MFG Search.XLSX"
+_DEFAULT_ELECTRICAL_COMPLETE = "Electrical PN_MFG Search_COMPLETE.xlsx"
+_DEFAULT_BOOK25              = "Book25.xlsx"
+
+# Hardcoded fallback data dir (Nolan's dev machine) — lowest priority
+_HARDCODED_DATA_DIR = "/Users/nolansulpizio/Desktop/Documents - Nolan's MacBook Pro/WESCO/Data Parse Agent/Data Context"
+
+
+def _load_test_config() -> dict:
+    """
+    Load test_config.json from the repo root if it exists.
+
+    Resolution order for data_dir:
+      1. --data-dir CLI argument   (highest — explicit override)
+      2. test_config.json          (per-developer local config)
+      3. TEST_DATA_DIR env var
+      4. hardcoded default         (lowest — Nolan's dev machine)
+
+    Individual file paths under test_config.json['files'] take precedence
+    over data_dir for that specific file, and may point to subdirectories.
+    """
+    config_path = _REPO_ROOT / "test_config.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: could not load test_config.json: {e}")
+    return {}
+
+
+def _resolve(p: str) -> Path:
+    """Resolve a path that may be absolute or relative to the repo root."""
+    path = Path(p)
+    return path if path.is_absolute() else _REPO_ROOT / path
+
+
+def _resolve_test_files(data_dir: Path, cfg: dict) -> dict:
+    """
+    Return a dict with resolved absolute Paths for each test file.
+
+    Keys: 'blank', 'complete', 'book25'.
+    Per-file config entries override data_dir-based resolution.
+    """
+    file_cfg = cfg.get("files", {})
+
+    def _pick(key, fallback_name):
+        if key in file_cfg:
+            return _resolve(file_cfg[key])
+        return data_dir / fallback_name
+
+    return {
+        "blank":    _pick("electrical_blank",    _DEFAULT_ELECTRICAL_BLANK),
+        "complete": _pick("electrical_complete",  _DEFAULT_ELECTRICAL_COMPLETE),
+        "book25":   _pick("book25",              _DEFAULT_BOOK25),
+    }
+
+
+_cfg = _load_test_config()
+
+DEFAULT_DATA_DIR = (
+    str(_resolve(_cfg["data_dir"])) if "data_dir" in _cfg
+    else os.environ.get("TEST_DATA_DIR", _HARDCODED_DATA_DIR)
+)
 
 # ═══════════════════════════════════════════════════════════════
 # TEST LOGGER
@@ -112,12 +173,12 @@ class TestLogger:
 # TEST PHASE 1: ACCURACY — Ground Truth Comparison
 # ═══════════════════════════════════════════════════════════════
 
-def test_accuracy(data_dir, output_dir, log):
+def test_accuracy(data_dir, output_dir, log, blank_path=None, truth_path=None):
     """Compare parser output against manually-verified ground truth."""
     log.section("PHASE 1: ACCURACY — Electrical PN/MFG Extraction vs Ground Truth")
 
-    blank_path = Path(data_dir) / ELECTRICAL_BLANK
-    truth_path = Path(data_dir) / ELECTRICAL_COMPLETE
+    blank_path = Path(blank_path) if blank_path else Path(data_dir) / _DEFAULT_ELECTRICAL_BLANK
+    truth_path = Path(truth_path) if truth_path else Path(data_dir) / _DEFAULT_ELECTRICAL_COMPLETE
 
     # Verify files exist
     if not blank_path.exists():
@@ -362,11 +423,11 @@ def test_unit_extraction(log):
 # TEST PHASE 4: SCALE TEST — Book25 (174 rows)
 # ═══════════════════════════════════════════════════════════════
 
-def test_scale_book25(data_dir, output_dir, log):
+def test_scale_book25(data_dir, output_dir, log, book25_path=None):
     """Test parser performance and extraction on large, differently-formatted dataset."""
     log.section("PHASE 4: SCALE TEST — Book25 (174 rows, different schema)")
 
-    book25_path = Path(data_dir) / BOOK25
+    book25_path = Path(book25_path) if book25_path else Path(data_dir) / _DEFAULT_BOOK25
     if not book25_path.exists():
         log.result("Book25 file availability", False, f"Missing: {book25_path}")
         return None
@@ -646,6 +707,9 @@ def main():
     data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir) if args.output_dir else data_dir / "test_results"
 
+    # Resolve individual test file paths (config > data_dir fallback)
+    file_paths = _resolve_test_files(data_dir, _cfg)
+
     # Initialize logger
     log = TestLogger(output_dir)
     log.info(f"Data directory: {data_dir}")
@@ -653,21 +717,32 @@ def main():
 
     # Pre-flight checks
     log.section("PRE-FLIGHT CHECKS")
-    for fname in [ELECTRICAL_BLANK, ELECTRICAL_COMPLETE, BOOK25]:
-        exists = (data_dir / fname).exists()
-        log.result(f"File exists: {fname}", exists)
-        if not exists and fname != BOOK25:
+    for label, path in [
+        (_DEFAULT_ELECTRICAL_BLANK,    file_paths["blank"]),
+        (_DEFAULT_ELECTRICAL_COMPLETE, file_paths["complete"]),
+        (_DEFAULT_BOOK25,              file_paths["book25"]),
+    ]:
+        exists = path.exists()
+        log.result(f"File exists: {label}", exists, str(path) if not exists else "")
+        if not exists and label != _DEFAULT_BOOK25:
             log.warning("Missing required test file - some tests will be skipped")
 
     # Run test phases
     all_results = {}
 
-    all_results['accuracy'] = test_accuracy(data_dir, output_dir, log)
+    all_results['accuracy'] = test_accuracy(
+        data_dir, output_dir, log,
+        blank_path=file_paths["blank"],
+        truth_path=file_paths["complete"],
+    )
     all_results['qa'] = test_qa_engine(output_dir, log)
     all_results['unit'] = test_unit_extraction(log)
 
     if not args.quick:
-        all_results['scale'] = test_scale_book25(data_dir, output_dir, log)
+        all_results['scale'] = test_scale_book25(
+            data_dir, output_dir, log,
+            book25_path=file_paths["book25"],
+        )
 
     all_results['normalization'] = test_normalization(log)
     all_results['edge_cases'] = test_edge_cases(log)

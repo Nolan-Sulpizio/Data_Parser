@@ -78,6 +78,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 1.0,
         'pn_structured': 1.0,
         'first_token_catalog': 1.2,
+        'embedded_code': 1.4,   # v3.6 — boosted: compressed SAP text has embedded PNs (drives, modules)
     },
     "SAP_DUAL_SOURCE": {
         # Rich sources (Material Desc + PO Text or Short Text).
@@ -94,6 +95,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 0.9,
         'pn_structured': 1.0,
         'first_token_catalog': 1.0,
+        'embedded_code': 1.0,   # v3.6
     },
     "SAP_STANDARD": {
         # Material Description with output columns — balanced.
@@ -109,6 +111,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 0.9,
         'pn_structured': 1.0,
         'first_token_catalog': 1.0,
+        'embedded_code': 1.0,   # v3.6
     },
     "DISTRIBUTOR_ORDER": {
         # Vendor column present and no inline labels — supplier_fallback is gold here.
@@ -124,6 +127,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 1.0,
         'pn_structured': 1.0,
         'first_token_catalog': 1.2,
+        'embedded_code': 1.1,   # v3.6
     },
     "LABELED_SPEC": {
         # Explicit PN:/MFG: labels in description — label extraction dominates.
@@ -139,6 +143,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 0.8,
         'pn_structured': 1.0,
         'first_token_catalog': 0.9,
+        'embedded_code': 0.8,   # v3.6 — labels dominate; embedded codes are secondary
     },
     "GENERIC": {
         # No structural signal — all multipliers neutral (no adjustment).
@@ -153,6 +158,7 @@ SCHEMA_MULTIPLIERS = {
         'trailing_numeric': 1.0,
         'pn_structured': 1.0,
         'first_token_catalog': 1.0,
+        'embedded_code': 1.0,   # v3.6
     },
 }
 

@@ -42,6 +42,9 @@ wesco_mro_history.db
 # Archives
 *.zip
 
+# Test configuration (per-developer, gitignored — copy test_config.example.json)
+test_config.json
+
 # Test data and results (local only)
 test_data/
 test_results*/
