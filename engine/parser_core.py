@@ -849,6 +849,11 @@ def _extract_mfg_from_supplier_value(supplier_raw: str) -> tuple:
     """
     Internal: extract MFG from a supplier column value.
     Returns (mfg_cleaned, confidence) excluding distributors.
+
+    P1: Applies NORMALIZE_MFG to raw and cleaned supplier names before returning,
+    so abbreviated supplier forms (e.g. "SEW EURODR") resolve to their canonical
+    manufacturer name early — preventing sanitize_mfg from wrongly rejecting them.
+    Confidence stays at 0.55 so text-derived MFG candidates still win when present.
     """
     if not supplier_raw:
         return None, 0.0
@@ -862,10 +867,21 @@ def _extract_mfg_from_supplier_value(supplier_raw: str) -> tuple:
     )
     if is_distributor:
         return None, 0.0
+
+    # P1: Try NORMALIZE_MFG on raw supplier name (catches abbreviated forms in supplier col)
+    normalized_raw = NORMALIZE_MFG.get(supplier_upper)
+    if normalized_raw and normalized_raw in KNOWN_MANUFACTURERS:
+        return normalized_raw, CONFIDENCE_SCORES['mfg_supplier']
+
     cleaned = _clean_supplier_name(s)
     if not cleaned:
         return None, 0.0
-    return cleaned, CONFIDENCE_SCORES['mfg_supplier']
+
+    cleaned_upper = cleaned.strip().upper()
+
+    # P1: Normalize cleaned name so abbreviations resolve before sanitize_mfg sees them
+    normalized_cleaned = NORMALIZE_MFG.get(cleaned_upper, cleaned_upper)
+    return normalized_cleaned, CONFIDENCE_SCORES['mfg_supplier']
 
 
 # ─────────────────────────────────────────────────────────────
