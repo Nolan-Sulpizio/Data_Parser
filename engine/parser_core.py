@@ -237,6 +237,38 @@ MFG_PREFIX_MAP = {
     'GE': 'GE',
 }
 
+# ── P0: 4-char composite code map (MDM-style concatenated codes) ─────────────
+# Format: [4-char MFG code][PN suffix], e.g. TBCO222TB → T&B PN=222TB
+# Source: Rigelwood / part_number_id dataset
+MFG_COMPOSITE_CODE_MAP = {
+    'TBCO': 'THOMAS & BETTS',
+    'BLIN': 'B-LINE',
+    'EGSM': 'EGS',
+    'AMCO': 'AMCO',
+    'HUWI': 'HUBBELL',
+    'GEDI': 'GE',
+    'BURN': 'BURNDY',
+    'COND': 'GENERIC CONDUIT',
+    'ALBR': 'ALLEN BRADLEY',
+    'WAGO': 'WAGO',
+    'IDEA': 'IDEAL',
+    'RAYC': 'RAYCHEM',
+    'HOFF': 'HOFFMAN',
+    '3MCO': '3M',
+    'TPCW': 'TPC WIRE & CABLE',
+    'CABR': 'CABLE',
+    'CRHI': 'CROUSE HINDS',
+    'CUHA': 'CUTLER-HAMMER',
+    'ELFL': 'ELECTRI-FLEX',
+    'ERMA': 'ERICSON',
+    'HULI': 'HUBBELL',
+    'KILL': 'KILLARK',
+    'OLFL': 'LAPP',
+    'PAND': 'PANDUIT',
+    'SHAW': 'MERSEN',
+    'WIRE': None,        # generic wire — no specific manufacturer
+}
+
 # Part Number Processing (from MRO spec)
 VALID_PN_RE = re.compile(r'^[A-Z0-9]+(?:[\-/][A-Z0-9]+)*$')
 # v3.4: Added _ to separator class to catch revision codes like 37090310152_REV2, LEGR_3106
@@ -258,6 +290,7 @@ CONFIDENCE_SCORES = {
     'pn_fallback_max': 0.65,    # Best-case heuristic
     'pn_catalog': 0.60,         # Pure catalog number (entire text IS the PN)
     'pn_prefix_decode': 0.75,   # Decoded from manufacturer prefix
+    'pn_composite_code': 0.82,  # P0: Decoded from 4-char MDM composite code
     'pn_dash_catalog': 0.80,    # Dash-separated catalog number (McMaster format)
     'pn_trailing_catalog': 0.68,  # v3.2: Trailing code in DESC,DESC,CATALOG format (Fix 1)
     'pn_trailing_numeric': 0.50,  # v3.2: Trailing pure-numeric code ≥7 digits (Fix 5)
@@ -269,6 +302,7 @@ CONFIDENCE_SCORES = {
     'mfg_context': 0.80,        # Pre-label context pattern (", GATES, PN:")
     'mfg_known': 0.85,          # Known manufacturer name found in text
     'mfg_prefix_decode': 0.80,  # Decoded from manufacturer prefix
+    'mfg_composite_code': 0.85, # P0: Decoded from 4-char MDM composite code
     'mfg_supplier': 0.55,       # Supplier name fallback (non-distributor)
 }
 
@@ -906,6 +940,10 @@ def sanitize_mfg(x: str) -> Optional[str]:
     # v3.1: extended blocklist — reject descriptor/non-MFG tokens unless they are a known manufacturer (Fix 2)
     if x in MFG_BLOCKLIST and x not in KNOWN_MANUFACTURERS:
         return None
+    # P0: if it's a confirmed known manufacturer, pass through immediately
+    # (e.g. "3M" contains a digit but is a valid manufacturer name)
+    if x in KNOWN_MANUFACTURERS:
+        return NORMALIZE_MFG.get(x, x)
     if re.search(r"\d", x):
         return None
     # v3: reject ≤2-char tokens unless they are a known manufacturer
@@ -945,6 +983,44 @@ def decode_mfg_prefix(text: str) -> tuple:
                 return MFG_PREFIX_MAP[prefix], remainder
 
     return None, None
+
+
+def decode_composite_code(text: str) -> tuple:
+    """
+    P0: Decode a 4-char manufacturer-prefixed composite product code.
+
+    MDM systems sometimes concatenate a 4-char vendor code with the actual PN,
+    e.g. "TBCO222TB" → MFG "THOMAS & BETTS", PN "222TB".
+         "ALBR1492EAJ35" → MFG "ALLEN BRADLEY", PN "1492EAJ35".
+         "WAGO222412" → MFG "WAGO", PN "222412".
+
+    Unlike decode_mfg_prefix() (which handles 2-3 char SAP codes), this function
+    handles 4-char MDM composite codes and allows pure-digit remainders since the
+    4-char prefix is specific enough to avoid false positives.
+
+    Returns:
+        (mfg, remainder_pn) if a known 4-char prefix is found and remainder ≥ 2 chars.
+        (None, None) otherwise.
+    """
+    if not text:
+        return None, None
+    # Isolate the first token — composite codes have no spaces
+    first_token = str(text).strip().upper().split()[0]
+    first_token = first_token.split(',')[0]
+
+    if len(first_token) <= 4:
+        return None, None
+
+    prefix = first_token[:4]
+    remainder = first_token[4:]
+
+    if prefix not in MFG_COMPOSITE_CODE_MAP:
+        return None, None
+    if len(remainder) < 2:
+        return None, None
+
+    mfg = MFG_COMPOSITE_CODE_MAP[prefix]
+    return mfg, remainder
 
 
 def _clean_supplier_name(name: str) -> Optional[str]:
@@ -1081,12 +1157,13 @@ def validate_and_clean(
                 _clear(df, idx, pn_col, pn_val, 'spec_value')
 
     # ── Rule 2: MFG contains digits ───────────────────────────────────────────
+    # Exception: known manufacturers like "3M" are allowed to have digits.
     if has_mfg:
         for idx, row in df.iterrows():
             mfg_val = str(row.get(mfg_col, '')).strip().upper()
             if _is_blank(mfg_val):
                 continue
-            if re.search(r'\d', mfg_val):
+            if re.search(r'\d', mfg_val) and mfg_val not in KNOWN_MANUFACTURERS:
                 _clear(df, idx, mfg_col, mfg_val, 'mfg_has_digits')
 
     # ── Rule 3: MFG is a known descriptor ─────────────────────────────────────
@@ -1318,11 +1395,18 @@ def pipeline_mfg_pn(
             if pn:
                 pn_candidates.append(ExtractionCandidate(pn, 'embedded_code', conf))
 
-        # Strategy: prefix decode (from first token)
+        # Strategy: prefix decode (from first token, 2-3 char SAP-style codes)
         prefix_mfg, prefix_pn = decode_mfg_prefix(combined_text)
         if prefix_pn:
             pn_candidates.append(ExtractionCandidate(
                 prefix_pn, 'prefix_decode', CONFIDENCE_SCORES['pn_prefix_decode']
+            ))
+
+        # P0: composite code decode (4-char MDM-style codes, e.g. TBCO222TB)
+        composite_mfg, composite_pn = decode_composite_code(combined_text)
+        if composite_pn:
+            pn_candidates.append(ExtractionCandidate(
+                composite_pn, 'composite_code', CONFIDENCE_SCORES['pn_composite_code']
             ))
 
         # Strategy: pure catalog (entire first text blob IS the PN)
@@ -1356,10 +1440,16 @@ def pipeline_mfg_pn(
             if mfg:
                 mfg_candidates.append(ExtractionCandidate(mfg, 'known_mfg', conf))
 
-        # Strategy: prefix decode
+        # Strategy: prefix decode (2-3 char SAP-style codes)
         if prefix_mfg:
             mfg_candidates.append(ExtractionCandidate(
                 prefix_mfg, 'prefix_decode', CONFIDENCE_SCORES['mfg_prefix_decode']
+            ))
+
+        # P0: composite code decode (4-char MDM-style codes)
+        if composite_mfg:
+            mfg_candidates.append(ExtractionCandidate(
+                composite_mfg, 'composite_code', CONFIDENCE_SCORES['mfg_composite_code']
             ))
 
         # Strategy: supplier fallback

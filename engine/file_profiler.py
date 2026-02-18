@@ -41,6 +41,7 @@ STRATEGY_WEIGHTS = {
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
         'first_token_catalog': 1.0,  # v3.4
         'embedded_code': 0.8,        # v3.6
+        'composite_code': 0.4,       # P0 — unlikely in labeled-rich files
     },
     "COMPRESSED_SHORT": {
         'label': 1.0, 'known_mfg': 1.2, 'context': 0.8,
@@ -49,6 +50,7 @@ STRATEGY_WEIGHTS = {
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
         'first_token_catalog': 1.0,  # v3.4
         'embedded_code': 1.2,        # v3.6 — boosted: compressed SAP text often has embedded PNs
+        'composite_code': 0.8,       # P0 — possible but less common in SAP text
     },
     "CATALOG_ONLY": {
         'label': 0.8, 'known_mfg': 0.5, 'context': 0.3,
@@ -57,6 +59,7 @@ STRATEGY_WEIGHTS = {
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
         'first_token_catalog': 1.1,  # v3.4 — slightly boosted in catalog-heavy files
         'embedded_code': 0.9,        # v3.6
+        'composite_code': 1.5,       # P0 — highly reliable in pure catalog files
     },
     "MIXED": {
         'label': 1.0, 'known_mfg': 1.0, 'context': 1.0,
@@ -70,6 +73,7 @@ STRATEGY_WEIGHTS = {
         'trailing_catalog': 1.0, 'trailing_numeric': 0.9, 'pn_structured': 1.0,
         'first_token_catalog': 1.0,  # v3.4
         'embedded_code': 1.0,        # v3.6
+        'composite_code': 1.2,       # P0 — boosted: MDM composite codes common in mixed files
     },
 }
 
