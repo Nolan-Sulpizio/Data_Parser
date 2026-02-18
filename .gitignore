@@ -39,6 +39,10 @@ wesco_mro_history.db
 *.csv
 !docs/*.md
 
+# Regression test infrastructure (commit these)
+!tests/inputs/*.xlsx
+!tests/golden/*.xlsx
+
 # Archives
 *.zip
 

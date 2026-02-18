@@ -1,0 +1,92 @@
+{
+  "_comment": "Regression test configuration. Column settings must reproduce baseline fill rates exactly.",
+  "_version": "v4.0.3",
+  "_baseline_date": "2026-02-17",
+  "files": {
+    "international_paper": {
+      "input": "tests/inputs/international_paper.xlsx",
+      "golden": "tests/golden/international_paper_v4.0.3.xlsx",
+      "source_cols": [
+        "Description",
+        "Material Description"
+      ],
+      "mfg_col": "MFG",
+      "pn_col": "PN",
+      "supplier_col": null,
+      "add_sim": true
+    },
+    "wesco_empty": {
+      "input": "tests/inputs/wesco_empty.xlsx",
+      "golden": "tests/golden/wesco_empty_v4.0.3.xlsx",
+      "source_cols": [
+        "Short Text"
+      ],
+      "mfg_col": "MFG",
+      "pn_col": "PN",
+      "supplier_col": "Supplier Name1",
+      "add_sim": true
+    },
+    "electrical": {
+      "input": "tests/inputs/electrical_not_complete.xlsx",
+      "golden": "tests/golden/electrical_v4.0.3.xlsx",
+      "source_cols": [
+        "Material Description",
+        "PO Text",
+        "Material PO Text"
+      ],
+      "mfg_col": "MFG",
+      "pn_col": "PN",
+      "supplier_col": null,
+      "add_sim": true
+    },
+    "part_number_id": {
+      "input": "tests/inputs/part_number_id.xlsx",
+      "golden": "tests/golden/part_number_id_v4.0.3.xlsx",
+      "source_cols": [
+        "Product ",
+        "Description"
+      ],
+      "mfg_col": "Manufacturer",
+      "pn_col": "Part Number",
+      "supplier_col": null,
+      "add_sim": true
+    }
+  },
+  "thresholds": {
+    "international_paper": {
+      "mfg": 93.8,
+      "pn": 93.8
+    },
+    "wesco_empty": {
+      "mfg": 60.5,
+      "pn": 59.2
+    },
+    "electrical": {
+      "mfg": 85.9,
+      "pn": 95.1
+    },
+    "part_number_id": {
+      "mfg": 10.1,
+      "pn": 98.6
+    }
+  },
+  "compare_cols": {
+    "_comment": "Columns compared row-by-row between golden and current output for regression diffing.",
+    "international_paper": [
+      "MFG",
+      "PN"
+    ],
+    "wesco_empty": [
+      "MFG",
+      "PN"
+    ],
+    "electrical": [
+      "MFG",
+      "PN"
+    ],
+    "part_number_id": [
+      "Manufacturer",
+      "Part Number"
+    ]
+  }
+}
