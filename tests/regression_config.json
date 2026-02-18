@@ -54,7 +54,7 @@
   },
   "thresholds": {
     "international_paper": {
-      "mfg": 93.8,
+      "mfg": 96.1,
       "pn": 93.8
     },
     "wesco_empty": {
