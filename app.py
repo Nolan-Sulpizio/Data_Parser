@@ -335,8 +335,14 @@ class WescoMROParser(ctk.CTk):
     # ───────────────────────────────────────────────────────
 
     def _build_parser_view(self):
-        view = ctk.CTkFrame(self.view_container, fg_color='transparent')
-        self.views['parser'] = view
+        # Outer non-scrolling shell — registered as the swappable view
+        outer = ctk.CTkFrame(self.view_container, fg_color='transparent')
+        self.views['parser'] = outer
+
+        # Everything lives inside a scrollable frame so the page scrolls
+        # naturally when content is taller than the viewport.
+        view = ctk.CTkScrollableFrame(outer, fg_color='transparent')
+        view.pack(fill='both', expand=True)
 
         # ── Header ──
         header = ctk.CTkFrame(view, fg_color='transparent')
@@ -542,8 +548,11 @@ class WescoMROParser(ctk.CTk):
             chip.pack(side='left', padx=(0, 6))
 
         # ── Preview table ──
-        self.preview_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'], corner_radius=12)
-        self.preview_frame.pack(fill='both', expand=True)
+        # Fixed height inside scrollable parent — user scrolls the page to see it.
+        self.preview_frame = ctk.CTkFrame(view, fg_color=BRAND['bg_card'],
+                                          corner_radius=12, height=420)
+        self.preview_frame.pack(fill='x', pady=(0, 16))
+        self.preview_frame.pack_propagate(False)
 
         preview_header = ctk.CTkFrame(self.preview_frame, fg_color='transparent')
         preview_header.pack(fill='x', padx=16, pady=(12, 8))
