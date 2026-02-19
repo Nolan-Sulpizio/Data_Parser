@@ -1,73 +1,66 @@
-# Wesco MRO Parser - Quick Start
+# Wesco MRO Parser — Quick Start
 
-Welcome to the Wesco MRO Parser! This tool helps you extract MFG, Part Numbers, and SIM values from messy Excel data.
+Welcome! This tool extracts MFG, Part Numbers, and SIM values from messy MRO Excel data in three steps.
 
-## 🚀 Getting Started (3 Easy Steps)
+---
+
+## 🚀 Getting Started
 
 ### 1. Launch the App
-- Double-click `WescoMROParser.exe`
-- No installation required!
+- **Windows:** Double-click `WescoMROParser.exe`
+- **macOS:** Double-click `WescoMROParser.app`
 
-### 2. Import Your Excel File
-- Drag and drop your `.xlsx` file onto the import zone
-- Or click "Browse" to select a file
+No installation required.
 
-### 3. Pick a Template
-In the sidebar, choose:
-- **MFG + PN Extract** → Extract manufacturer and part numbers
-- **Part Number Clean** → Validate existing part numbers
-- **Build SIM Values** → Generate SIM from MFG + ITEM #
+### 2. Drop Your File
+Drag and drop your `.xlsx`, `.xls`, or `.csv` file onto the import zone (or click to browse).
 
-Then click **▶ Run Parser** and **💾 Export** when done!
+The app scans the file instantly and highlights the best source column automatically.
+
+### 3. Confirm and Parse
+- Review the auto-selected source column — the smart preview shows 3–5 sample parsed rows so you can confirm the engine is reading the right data.
+- Adjust the column selection if needed.
+- Click **▶ PARSE FILE**.
+
+That's it. Results save automatically to the same folder as your source file:
+- `YourFile_parsed.xlsx` — cleaned data with MFG and PN columns appended
+- `YourFile_QA.csv` — rows flagged for review (missing values, anomalies)
 
 ---
 
-## 📚 Need Help?
-
-**Full Documentation:** https://github.com/Nolan-Sulpizio/Data_Parser/blob/main/README.md
-
-**Common Questions:**
+## ❓ Common Questions
 
 **Q: What file types are supported?**
-A: `.xlsx`, `.xls`, and `.csv` files
+A: `.xlsx`, `.xls`, and `.csv`
 
 **Q: Do I need internet access?**
-A: No! This tool works 100% offline.
+A: No. This tool works 100% offline — no API keys, no cloud services.
 
-**Q: Where is my data saved?**
-A: Your processing history is saved locally at:
-   `C:\Users\[YourName]\.wesco_mro_parser\wesco_mro_history.db`
+**Q: Where do my output files go?**
+A: Automatically saved to the same directory as your source file. Click **Open File Location** after parsing to go there directly.
 
-**Q: Can I save my instructions for reuse?**
-A: Yes! After running the parser, click "⚙ Save Config" to save your instruction as a template.
+**Q: The wrong column was auto-selected — what do I do?**
+A: The column panel shows all relevant columns scored by the engine. Uncheck the auto-selected one and check the correct column. The parse preview will update instantly.
 
-**Q: The parser didn't find what I needed — can I write custom instructions?**
-A: Absolutely! Instead of picking a template, type your own instruction:
-   - "Pull MFG and PN from Material Description"
-   - "Extract manufacturer from PO Text into column A"
-   - "Generate SIM using pattern C"
+**Q: A manufacturer name is wrong or abbreviated (e.g., "SEW EURODR")?**
+A: These are handled automatically by the normalization map. If you find one that isn't corrected, open a [Normalization Request](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=normalization_request.md).
 
 ---
 
-## 🛠️ Quick Templates Explained
+## 💡 Tips for Best Results
 
-### MFG + PN Extract
-- **What it does:** Pulls manufacturer and part number from description fields
-- **Source columns:** Material Description, PO Text
-- **Output columns:** MFG, PN, SIM (optional)
-- **Best for:** Raw MRO data that needs full extraction
+- **Files with a "Short Text" or "Material Description" column** work out of the box — the engine recognizes these automatically.
+- **Files with unnamed columns** — the engine peeks at row content and shows sample values so you can identify the right column visually.
+- **Check the QA file** — rows flagged as `PN_NOT_IN_SOURCE` are worth reviewing manually. They indicate the engine extracted a value that wasn't clearly visible in the source text.
+- **Supplier column** — if your file has a Supplier Name column, the engine auto-detects it and uses it as an MFG fallback for rows where the description alone isn't enough.
 
-### Part Number Clean
-- **What it does:** Validates and cleans existing Part Number fields
-- **Source columns:** Part Number 1, Description, Notes
-- **Output column:** Part Number 1 (cleaned)
-- **Best for:** Files that already have part numbers but need validation
+---
 
-### Build SIM Values
-- **What it does:** Creates SIM values from existing MFG and ITEM # columns
-- **Source columns:** MFG, ITEM #
-- **Output column:** SIM
-- **Best for:** BOM files missing SIM values
+## 🔒 Privacy & Security
+
+- All processing is **100% local** — no data leaves your machine
+- No internet connection required
+- No API keys or accounts needed
 
 ---
 
@@ -75,35 +68,14 @@ A: Absolutely! Instead of picking a template, type your own instruction:
 
 **Contact:** Nolan Sulpizio
 - Microsoft Teams: @Nolan Sulpizio
-- Slack: Global Accounts channel
-- GitHub Issues: https://github.com/Nolan-Sulpizio/Data_Parser/issues
+- GitHub Issues: [github.com/Nolan-Sulpizio/Data_Parser/issues](https://github.com/Nolan-Sulpizio/Data_Parser/issues)
 
-**Report a Bug:** https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=bug_report.md
-
----
-
-## ✨ Tips for Best Results
-
-1. **Use descriptive column names** — The parser looks for columns like "Material Description", "PO Text", etc.
-2. **Check the preview** — Always review the Output preview before exporting
-3. **Review QA Issues** — If the app finds issues, it will create a separate "QA Issues.xlsx" file
-4. **Save your configs** — If you process similar files regularly, save your instruction as a template
-
----
-
-## 🔒 Privacy & Security
-
-- All processing happens **100% offline** on your machine
-- No data is sent to the internet
-- No API keys or cloud services required
-- All files stay on your local computer
+**Full documentation:** [README.md](README.md)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for the Wesco Global Accounts Team**
-
-v2.0.0 • Wesco International
+v5.0.0 · Wesco International · Global Accounts
 
 </div>

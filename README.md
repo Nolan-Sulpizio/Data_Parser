@@ -1,18 +1,18 @@
 <div align="center">
 
-#  Wesco MRO Data Parser
+# Wesco MRO Data Parser
 
 **Intelligent Excel parsing for MRO data extraction — Built for the Global Accounts Team**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue.svg)]()
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-5.0.0-green.svg)](CHANGELOG.md)
 [![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen.svg)]()
 
 [Features](#-features) •
 [Quick Start](#-quick-start) •
-[Usage](#-usage) •
+[Usage](#-usage-guide) •
 [Architecture](#-architecture) •
 [Contributing](CONTRIBUTING.md) •
 [Security](SECURITY.md)
@@ -21,378 +21,237 @@
 
 ---
 
-## 📋 Table of Contents
+## Overview
 
-- [Overview](#-overview)
-- [The Problem](#-the-problem)
-- [The Solution](#-the-solution)
-- [Features](#-features)
-- [Demo](#-demo)
-- [Quick Start](#-quick-start)
-- [Usage Guide](#-usage-guide)
-- [Processing Pipelines](#-processing-pipelines)
-- [Architecture](#-architecture)
-- [QA Engine](#-qa-engine)
-- [Manufacturer Normalization](#-manufacturer-normalization)
-- [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
-- [License](#-license)
+**Wesco MRO Parser** is a standalone desktop application that automates extraction of **Manufacturer (MFG)**, **Part Number (PN)**, and **SIM** values from unstructured MRO Excel data.
 
----
+Built for Wesco International's Global Accounts Business Development Associates (BDAs), it replaces the manual, error-prone process of rebuilding AI chat sessions for every new file — delivering a three-step solution that works on any Windows or Mac machine.
 
-## 📖 Overview
-
-**Wesco MRO Parser** is a standalone desktop application that automates the extraction of **Manufacturer (MFG)**, **Part Number (PN)**, and **SIM** values from unstructured MRO Excel data.
-
-Built specifically for Wesco International's Global Accounts Business Development Associates (BDAs), this tool eliminates the manual, repetitive process of rebuilding AI chat sessions for every new file — giving the team a one-click solution they can run on any Windows machine.
-
-###  **100% Offline. No API Keys. No Internet Required.**
+### 100% Offline. No API Keys. No Internet Required.
 
 All processing happens locally on your machine. No data leaves your computer.
 
 ---
 
-##  The Problem
+## The Problem
 
-Global Accounts BDAs receive large Excel files containing thousands of line items with messy, unstructured product descriptions. Extracting clean MFG, PN, and SIM values manually is:
+Global Accounts BDAs receive large Excel files with thousands of messy, unstructured MRO line items. Extracting clean MFG, PN, and SIM values manually is:
 
--  **Time-intensive** — Hours per file
--  **Error-prone** — Inconsistent formatting, abbreviations, distributors mistaken for manufacturers
--  **Repetitive** — Same logic rebuilt in Copilot for every new file
--  **Frustrating** — Context gets lost, accuracy degrades with large files
+- **Time-intensive** — Hours per file
+- **Error-prone** — Abbreviations, distributors mistaken for manufacturers, spec values captured as part numbers
+- **Repetitive** — Same logic rebuilt in Copilot for every new file
 
 ### Before This Tool
 ```
-Import Excel → Build Copilot prompt → Parse columns → Fix errors → Export → Repeat for next file
-                    ↑______________________↑
-               (This happens EVERY time)
+Import Excel → Build AI prompt → Parse columns → Fix errors → Export → Repeat
+                   ↑______________________________________↑
+                         (Every. Single. File.)
 ```
 
 ### With This Tool
 ```
-Import Excel → Click template → Export clean data
-                    ↑
-              (One click, every time)
+Drop file → Confirm source column → Click PARSE FILE → Done
 ```
 
 ---
 
-##  The Solution
-
-This tool encapsulates proven parsing logic into a distributable desktop app with a modern GUI. Team members:
-
-1. **Import** an Excel file (drag-and-drop or browse)
-2. **Describe** what they need in plain English (or pick a pre-built template)
-3. **Export** a cleaned workbook with auto-generated QA report
-
-**Result:** Minutes instead of hours. Consistent quality. Reusable configurations.
-
----
-
-##  Features
+## Features
 
 ### Core Capabilities
 
 | Feature | Description |
 |---------|-------------|
-| 📂 **Drag-and-drop import** | Load `.xlsx`, `.xls`, or `.csv` files directly into the app |
-| 💬 **Natural language instructions** | Type what you need: *"Pull MFG and PN from Material Description into columns A and B"* |
-| ⚙️ **3 built-in pipelines** | MFG/PN Extraction • Part Number Reprocessing • SIM Builder |
-| 👁️ **Live preview** | Compare input vs. output side-by-side before exporting |
-| ✅ **Automated QA report** | Flags missing data, distributor-as-MFG errors, digit issues, naming inconsistencies |
-| 📊 **Processing history** | Every job logged locally with full stats (rows processed, fields filled, issues found) |
-| 💾 **Saved configurations** | Save and reuse instruction templates across sessions |
-| 📦 **Team-distributable** | Single `.exe` file — recipients don't need Python installed |
+| 📂 **Drag-and-drop import** | Load `.xlsx`, `.xls`, or `.csv` files directly |
+| 🧠 **Smart column detection** | Automatically scores and selects the best source column(s) — no manual mapping |
+| 👁️ **Live parse preview** | Shows parsed MFG/PN from 3–5 sample rows before committing to a full run |
+| ⚙️ **Multi-strategy engine** | Labeled, prefix-decoded, context-inferred, known-MFG, and heuristic extraction — best result wins |
+| ✅ **Automated QA report** | Flags missing data, distributor-as-MFG, digit anomalies, naming inconsistencies |
+| 📤 **Auto-export** | Saves `_parsed.xlsx` and `_QA.csv` to the source file's directory — no export button needed |
+| 📦 **Team-distributable** | Single `.exe` or `.app` — no Python required |
 
 ### Technical Highlights
 
-- 🎨 Modern dark theme with Wesco corporate branding (#009639 green)
-- 🗃️ Local SQLite database for history and saved configs
-- 🔍 **Smart column detection** — Automatically maps any file format to semantic roles using fuzzy matching
-- 🎓 **Self-learning engine** — Train from completed files to expand MFG normalization and column recognition
-- 📋 **Dynamic manufacturer database** — 105+ known manufacturers (vs ~10 hardcoded) with continuous learning
-- 🚫 Distributor filtering (GRAYBAR, CED, REXEL, etc.)
-- ⚡ Fast processing — handles 10,000+ row files efficiently
+- Modern dark theme with Wesco corporate branding (#009639 green)
+- **5-layer extraction engine:** File profiling → confidence scoring → multi-strategy extraction → post-validation → QA
+- **File format detection:** Classifies files as `LABELED_RICH`, `COMPRESSED_SHORT`, `CATALOG_ONLY`, or `MIXED` — adjusts strategy weights accordingly
+- **Distributor filtering** — GRAYBAR, CED, REXEL, McMaster-Carr, and 30+ others excluded as MFG
+- **MFG normalization** — handles SAP truncations (e.g., `SEW EURODR` → `SEW EURODRIVE`) and abbreviations
+- **Zero spec leaks** — voltage, amperage, RPM, dimensions never appear as part numbers
+- **Zero plant code leaks** — SAP plant codes (e.g., `N141`, `N041`) never appear as part numbers
+- ⚡ Fast — handles 10,000+ row files efficiently
 - 🔐 100% offline — no internet, no APIs, no telemetry
+
+### Production Benchmarks (2,684-row WESCO file)
+
+| Metric | Result |
+|--------|--------|
+| MFG fill rate | **60.5%** (1,624 / 2,684) |
+| PN fill rate | **59.3%** (1,592 / 2,684) |
+| AB / TE / GE hallucinations | **0** |
+| Spec/plant code leaks | **0** |
+| Distributor-as-MFG | **0** |
 
 ---
 
-##  Demo
+## Demo
 
-### Main Interface
-The app provides a clean, intuitive interface with three main sections:
+### The Interface (v5.0 — Three-Step Flow)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  [SIDEBAR]          │  [MAIN WORKSPACE]                     │
-│                     │                                        │
-│  ◉ WESCO           │  ┌──────────────────────────────────┐  │
-│  MRO Data Parser   │  │  📂 Drop Excel file here         │  │
-│                     │  └──────────────────────────────────┘  │
-│  ⬡ Parser          │                                        │
-│  ◷ History         │  ┌──────────────────────────────────┐  │
-│  ⚙ Saved Configs   │  │  What do you need?               │  │
-│                     │  │  "Extract MFG and PN from..."    │  │
-│  QUICK TEMPLATES    │  └──────────────────────────────────┘  │
-│  • MFG + PN Extract │                                        │
-│  • Part Number Clean│  [▶ Run Parser]  [💾 Export]          │
-│  • Build SIM Values │                                        │
-│                     │  ┌──────────────────────────────────┐  │
-│  v2.0.0 • Wesco    │  │  Preview: [Input] [Output]       │  │
-│                     │  │  ┌────┬──────┬──────┬──────┐     │  │
-│                     │  │  │Row │ MFG  │  PN  │ SIM  │     │  │
-│                     │  │  ├────┼──────┼──────┼──────┤     │  │
-│                     │  │  │ 1  │PAND..│ ...  │ ...  │     │  │
-│                     │  │  └────┴──────┴──────┴──────┘     │  │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  [W] WESCO   MRO Data Parser                      v5.0  │
+│──────────────────────────────────────────────────────────│
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │                                                  │    │
+│  │        📁  Drop Excel file here                  │    │
+│  │            or click to browse                    │    │
+│  │                                                  │    │
+│  │        .xlsx    .xls    .csv                     │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  ✓ WESCO_Empty.xlsx  ·  2,684 rows  ·  9 columns        │
+│                                                          │
+│  SOURCE DATA  (columns scored for MFG/PN content)        │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │  ✅ E: Short Text            ← auto-selected     │    │
+│  │  ☐  A: Supplier Name1                            │    │
+│  └──────────────────────────────────────────────────┘    │
+│  Supplier hint auto-detected: Supplier Name1             │
+│                                                          │
+│  PARSE PREVIEW                                           │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │  Row 1:  "S-17080 - ANTIBACTERIAL HAND SOAP"    │    │
+│  │          → MFG: ULINE   PN: S-17080              │    │
+│  │  Row 4:  "PWR SPLY UNIT,SIEMENS,PN:6EP1434..."  │    │
+│  │          → MFG: SIEMENS  PN: 6EP1434-2BA20       │    │
+│  │  Row 5:  "CKT BRKR,EATON,19YG89"                │    │
+│  │          → MFG: EATON    PN: 19YG89              │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │                                                  │    │
+│  │              ▶  PARSE FILE                       │    │
+│  │                                                  │    │
+│  └──────────────────────────────────────────────────┘    │
+│                                                          │
+│  ── after parse completes ──                             │
+│                                                          │
+│  ✅ COMPLETE                                             │
+│  2,684 rows processed                                    │
+│  MFG filled: 1,624 (60.5%)                               │
+│  PN filled:  1,592 (59.3%)                               │
+│                                                          │
+│  📄 Saved: WESCO_Empty_parsed.xlsx                       │
+│  📊 QA:    WESCO_Empty_QA.csv                            │
+│                                                          │
+│  [Open File Location]      [Parse Another File]          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Workflow Example
+### What the Engine Does to Raw Data
 
-**Step 1:** Import a file
+**Input (Short Text column):**
 ```
-Material Description               | PO Text
-──────────────────────────────────────────────────────
-PANDT CABLE TIE 8IN BLACK         | CT-8-BLACK-100
-CROUSE HIND EXPPROOF BOX 3/4      | EXB-075-1G
-FXBRO TEMP SENSOR 0-200F          | TS-200F-4-20MA
-```
-
-**Step 2:** Pick template or type instruction
-```
-Template: "Extract MFG and PN from Material Description and PO Text"
-⚡ Interpreted as: mfg_pn pipeline → columns A and B
+PANDT CABLE TIE 8IN BLACK
+PWR SPLY UNIT,SIEMENS,6EP1434-28A20,INPUT 85-264VAC
+CKT BRKR,MINTR,40A,48/96VDC,EATON,19YG89
+SEW EURODR GEAR MOTOR 3AXD50000731121
 ```
 
-**Step 3:** Review output
+**Output (MFG + PN appended):**
 ```
-MFG           | PN              | SIM
-────────────────────────────────────────────
-PANDUIT       | CT-8-BLACK-100  | PANDUIT-CT-8-BLACK-100
-CROUSE HINDS  | EXB-075-1G      | CROUSE HINDS-EXB-075-1G
-FOXBORO       | TS-200F-4-20MA  | FOXBORO-TS-200F-4-20MA
-```
-
-**QA Report:**
-```
-✓ 3 rows processed
-✓ 3 MFG filled
-✓ 3 PN filled
-✓ 0 issues detected
+MFG            PN
+──────────────────────────────────────
+PANDUIT        (no PN in source)
+SIEMENS        6EP1434-28A20
+EATON          19YG89
+SEW EURODRIVE  3AXD50000731121
 ```
 
 ---
 
 ## ⚡ Quick Start
 
-### Option 1: Run the .exe (Recommended for Team Members)
+### Option 1: Run the App (Team Members)
 
-1. **Download** `WescoMROParser.exe` from the latest release
-2. **Double-click** to launch (no installation needed)
-3. **Import** your Excel file and start parsing
+1. **Download** `WescoMROParser.exe` (Windows) or `WescoMROParser.app` (Mac) from the latest release
+2. **Double-click** to launch — no installation needed
+3. **Drop your Excel file** and follow the three steps
 
-### Option 2: Run from Source (For Developers)
+### Option 2: Run from Source (Developers)
 
 ```bash
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/Nolan-Sulpizio/Data_Parser.git
 cd Data_Parser
 
-# 2. Install Python 3.10+ (if not already installed)
-# Download from: https://www.python.org/downloads/
-
-# 3. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 4. Launch the application
+# Launch
 python app.py
 ```
 
-### Option 3: Build the .exe Yourself
+### Option 3: Build the App Yourself
 
 ```bash
-# On a Windows machine:
+# macOS
+./build_mac.sh
+# → WescoMROParser.app
+
+# Windows
 build_windows.bat
-
-# Output: dist/WescoMROParser.exe
+# → dist/WescoMROParser.exe
 ```
-
-Share the resulting `.exe` with your team — **no Python installation required** on their machines.
 
 ---
 
-## 📘 Usage Guide
+## Usage Guide
 
-### Step 1: Import Your Data
+### Step 1: Drop Your File
 
-Launch the app and **drag an Excel file** onto the import zone (or click to browse).
+Drag an Excel file onto the import zone (or click to browse).
 
 **Supported formats:** `.xlsx`, `.xls`, `.csv`
 
-The app shows a preview of your data with row/column counts:
+The app immediately scans the file and shows:
 ```
 ✓ Loaded: MRO_Data_Q1_2026.xlsx
-  1,247 rows  •  12 columns  •  Cols: Material Description, PO Text, Notes, ...
+  1,247 rows  •  12 columns
 ```
 
-### Step 2: Provide Instructions
+Any inline warnings appear here (unnamed columns, large empty ranges, etc.).
 
-Either **type a natural language instruction** or **pick a Quick Template** from the sidebar:
+### Step 2: Confirm Source Columns
 
-#### Quick Templates
+The engine scores every column 0–100 based on name signals and content patterns, then shows only the columns worth considering:
 
-| Template | What It Does |
-|----------|-------------|
-| **MFG + PN Extract** | Extract MFG and PN from Material Description and PO Text into separate columns |
-| **Part Number Clean** | Clean and validate Part Number 1 from description fields (strict format rules) |
-| **Build SIM Values** | Generate SIM from existing MFG and ITEM # for rows with missing SIM |
+- **Score ≥ 40** — auto-checked
+- **Score 10–39** — shown unchecked (user can enable)
+- **Score < 10** — hidden (Plant, Date, Qty columns, etc.)
 
-#### Example Instructions
+The supplier column (e.g., `Supplier Name1`) is auto-detected and shown as a hint — no configuration needed.
 
+A **live parse preview** shows 3–5 representative rows so you can visually confirm the engine is reading the right column before running the full file.
+
+### Step 3: Parse
+
+Click **▶ PARSE FILE**. The progress bar tracks row processing.
+
+When complete, the results appear automatically:
 ```
-"Pull MFG and PN from Material Description into columns A and B"
-"Extract manufacturer and part number, include SIM"
-"Build SIM from MFG and ITEM # using pattern C"
-"Clean Part Number 1 from description fields"
-```
+✅ COMPLETE
+1,247 rows processed
+MFG filled: 1,198 (96%)
+PN filled:  1,156 (93%)
 
-The app will interpret your instruction and show feedback:
-```
-⚡ Interpreted as: mfg_pn pipeline → MFG to column A, PN to column B, add SIM
-```
-
-### Step 3: Run the Parser
-
-Click **▶ Run Parser**. The progress bar tracks the operation:
-
-```
-Processing... ████████████████████████░░░░ 80%
+📄 Saved: MRO_Data_Q1_2026_parsed.xlsx
+📊 QA:    MRO_Data_Q1_2026_QA.csv
 ```
 
-When complete, the preview switches to the **Output** view showing your cleaned data.
-
-### Step 4: Review & Export
-
-Review the results:
-- Toggle between **Input** and **Output** views
-- Check the stats: `Rows: 1247  •  MFG filled: 1198  •  PN filled: 1156  •  ⚠ 23 issues`
-- Review flagged rows in the preview table
-
-Click **💾 Export** to save:
-- `MRO_Data_Q1_2026 - parsed.xlsx` — Cleaned workbook
-- `MRO_Data_Q1_2026 - QA Issues.xlsx` — Flagged rows (if any issues detected)
-
-### Step 5: Save Configuration (Optional)
-
-If you'll use the same instruction again, click **⚙ Save Config**:
-```
-Configuration name: "Standard MFG/PN Extract"
-```
-
-Next time, just load the config instead of retyping the instruction.
-
----
-
-## 🎓 Advanced: Training the Engine
-
-### What is Training?
-
-The parser includes a **self-learning engine** that can improve its accuracy by analyzing completed files. When you "train" the system, it learns:
-
-- **New MFG name variants** (e.g., `CUTLR-HMR` → `CUTLER-HAMMER`)
-- **Column name variations** (e.g., `Product Desc` is a description column)
-- **Part number patterns** to better identify valid PNs
-
-### How to Train
-
-1. Collect **completed** Excel files where MFG and PN columns are already filled in correctly
-2. In the app, click **🎓 Train from Files** (in the Advanced section)
-3. Select the folder containing your completed files
-4. The app will analyze the files and update its knowledge base
-
-### What Gets Learned
-
-```
-Training Complete!
-
-Files processed: 5
-Rows analyzed: 623
-Known manufacturers: 105 (was 10)
-MFG normalizations: 155 (was 11)
-```
-
-**Result:** The parser now recognizes 105 manufacturer names and 155 abbreviation variants — dramatically improving accuracy on future files.
-
-### Training Best Practices
-
-- **Quality over quantity:** Train on files you've manually reviewed and corrected
-- **Incremental updates:** You can train multiple times — new data merges with existing
-- **Share knowledge:** Training data is saved to `training_data.json` — can be shared with team
-- **Verify results:** After training, test on a sample file to confirm improvements
-
----
-
-## 🔧 Processing Pipelines
-
-The parser includes three specialized pipelines, each designed for a specific MRO data extraction task:
-
-### Pipeline 1: MFG + PN Extraction
-
-**Purpose:** Extract Manufacturer and Part Number from unstructured product descriptions
-
-**Source Spec:** [`docs/MFG_PN_Parsing_Agent_Spec.md`](docs/MFG_PN_Parsing_Agent_Spec.md)
-
-**How it works:**
-1. Reads from columns like `Material Description`, `PO Text`, `Material PO Text`
-2. Uses labeled pattern matching (e.g., `MFG: PANDUIT PN: CT-8-BLACK`)
-3. Falls back to heuristic extraction (position-based, format-based)
-4. Normalizes common abbreviations (`PANDT` → `PANDUIT`, `FXBRO` → `FOXBORO`)
-5. Filters out distributor names and descriptor tokens
-6. Optionally generates SIM (`MFG-PN`)
-
-**Input columns:** `Material Description`, `Material PO Text`, `PO Text`
-**Output columns:** `MFG`, `PN`, `SIM` (optional)
-
----
-
-### Pipeline 2: Part Number Reprocessing
-
-**Purpose:** Strictly clean and validate existing Part Number columns
-
-**Source Spec:** [`docs/MRO_Part_Number_Processing_Spec.md`](docs/MRO_Part_Number_Processing_Spec.md)
-
-**How it works:**
-1. Reads from `Part Number 1`, `Description`, `Notes`, `INFORECTXT1/2`
-2. Rejects bare specs like `500W`, `12V`, `3/4"`
-3. Enforces structured format (must contain letters AND digits)
-4. Excludes internal/legacy prefixes
-5. Prefers tokens with dashes or slashes (`ABC-123` over `ABC 123`)
-6. Cross-validates against MFG column
-
-**Input columns:** Description fields, `Notes`, `INFORECTXT1/2`
-**Output column:** `Part Number 1` (cleaned + validated)
-
----
-
-### Pipeline 3: SIM Builder
-
-**Purpose:** Generate SIM values for rows where SIM is missing
-
-**Source Spec:** [`docs/SIM_BOM_Automation_Spec.md`](docs/SIM_BOM_Automation_Spec.md)
-
-**How it works:**
-1. Reads existing `MFG` and `ITEM #` columns
-2. Only processes rows where `SIM` is blank
-3. Concatenates using one of three patterns:
-
-| Pattern | Format | Example |
-|---------|--------|---------|
-| **A** | `MFG-ITEM #` (keeps punctuation) | `PIP-50-N150G/L` |
-| **B** | `MFGITEM` (compact, no hyphen) | `PIP50-N150G/L` |
-| **C** | `MFG-ALNUM` (sanitized alphanumeric only) | `PIP-50N150GL` |
-
-**Input columns:** `MFG`, `ITEM #`
-**Output column:** `SIM`
+Both files are saved to the same directory as your source file. Click **Open File Location** to go there directly, or **Parse Another File** to start over.
 
 ---
 
@@ -401,89 +260,79 @@ The parser includes three specialized pipelines, each designed for a specific MR
 ### High-Level Design
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        Wesco MRO Parser                              │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │                     GUI Layer (app.py)                          │ │
-│  │  ┌──────────┐  ┌───────────────┐  ┌──────────┐  ┌───────────┐ │ │
-│  │  │  Import   │  │  Instruction  │  │  Preview │  │  Export   │ │ │
-│  │  │   Zone    │  │    Input      │  │   Table  │  │  Manager  │ │ │
-│  │  └─────┬────┘  └──────┬────────┘  └─────┬────┘  └─────┬─────┘ │ │
-│  └────────┼──────────────┼──────────────────┼─────────────┼───────┘ │
-│           │              │                  │             │          │
-│  ┌────────▼──────────────▼──────────────────▼─────────────▼───────┐ │
-│  │                    Engine Layer (engine/)                       │ │
-│  │                                                                │ │
-│  │  ┌────────────────────┐   ┌──────────────────────────────────┐ │ │
-│  │  │ column_mapper      │◄──│    training.py (NEW v2.1)        │ │ │
-│  │  │                    │   │                                  │ │ │
-│  │  │ Smart column       │   │ ┌──────────────────────────────┐ │ │ │
-│  │  │ detection ────────►│   │ │ Ingest completed files       │ │ │ │
-│  │  │                    │   │ │ Extract MFG normalization    │ │ │ │
-│  │  │ Maps any file      │   │ │ Learn column name variants   │ │ │ │
-│  │  │ format to roles    │   │ │ Build manufacturer database  │ │ │ │
-│  │  └──────┬─────────────┘   │ └──────────────────────────────┘ │ │ │
-│  │         │                 │  Output: training_data.json      │ │ │
-│  │         │                 └──────────────────────────────────┘ │ │
-│  │         ▼                                                       │ │
-│  │  ┌────────────────────┐   ┌──────────────────────────────────┐ │ │
-│  │  │ instruction_parser │   │         parser_core              │ │ │
-│  │  │                    │   │                                  │ │ │
-│  │  │ NL text ──────────►│   │  ┌────────────┐ ┌────────────┐  │ │ │
-│  │  │  ──► Pipeline      │──►│  │  MFG / PN  │ │ Part Number│  │ │ │
-│  │  │  ──► Source cols   │   │  │  Extraction │ │  Cleaning  │  │ │ │
-│  │  │  ──► Target cols   │   │  └────────────┘ └────────────┘  │ │ │
-│  │  │  ──► SIM pattern   │   │  ┌────────────┐ ┌────────────┐  │ │ │
-│  │  └────────────────────┘   │  │    SIM     │ │  QA Engine │  │ │ │
-│  │                           │  │   Builder  │ │            │  │ │ │
-│  │                           │  └────────────┘ └────────────┘  │ │ │
-│  │                           └──────────────────────────────────┘ │ │
-│  │                                                                │ │
-│  │  ┌────────────────────┐                                        │ │
-│  │  │    history_db      │  SQLite: jobs, saved configs           │ │
-│  │  └────────────────────┘                                        │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                    Wesco MRO Parser                        │
+│                                                            │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   GUI Layer (app.py)                │   │
+│  │  Drop Zone → Column Selector → Preview → Parse Btn │   │
+│  │                  → Results + Auto-Export            │   │
+│  └─────────────────────────┬───────────────────────────┘   │
+│                            │                               │
+│  ┌─────────────────────────▼───────────────────────────┐   │
+│  │                  Engine Layer (engine/)              │   │
+│  │                                                     │   │
+│  │  column_mapper.py                                   │   │
+│  │  ├── score_column_for_parsing()  ← auto-detection   │   │
+│  │  ├── detect_supplier_column()    ← auto-detection   │   │
+│  │  └── suggest_columns()                              │   │
+│  │                                                     │   │
+│  │  file_profiler.py                                   │   │
+│  │  └── profile_file()  → LABELED_RICH | MIXED | ...  │   │
+│  │                                                     │   │
+│  │  schema_classifier.py                               │   │
+│  │  └── classify()  → SAP_SHORT_TEXT | GENERIC | ...  │   │
+│  │                                                     │   │
+│  │  parser_core.py                                     │   │
+│  │  ├── pipeline_mfg_pn()   ← primary pipeline        │   │
+│  │  ├── parse_single_row()  ← preview helper          │   │
+│  │  └── run_qa()                                      │   │
+│  │                                                     │   │
+│  │  instruction_parser.py  (secondary / advanced)     │   │
+│  │  history_db.py           (SQLite job log)          │   │
+│  │  training.py             (training ingestion)      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                            │
+│  training_data.json    ← mfg_normalization + known MFGs   │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ### File Structure
 
 ```
-Data_Parser/
-├── app.py                          # Main GUI application (customtkinter)
+mro-parser/
+├── app.py                          # Main GUI — v5.0 single-panel interface
 ├── engine/
-│   ├── __init__.py                 # Package init + version (v2.1.0)
-│   ├── parser_core.py              # Core parsing logic & pipelines
-│   ├── instruction_parser.py       # NL instruction → pipeline config
-│   ├── column_mapper.py            # ⭐ NEW: Smart column detection
-│   ├── training.py                 # ⭐ NEW: Training data ingestion
-│   └── history_db.py               # Local SQLite for history + configs
-├── training_data.json              # ⭐ NEW: Learned patterns & normalizations
+│   ├── __init__.py                 # Package init + version
+│   ├── parser_core.py              # MFG/PN pipelines, confidence scoring, QA
+│   ├── column_mapper.py            # Column scoring, supplier detection, mapping
+│   ├── file_profiler.py            # File archetype detection + strategy weights
+│   ├── schema_classifier.py        # Schema detection (SAP_SHORT_TEXT, GENERIC, etc.)
+│   ├── instruction_parser.py       # NL instruction → pipeline config (advanced)
+│   ├── history_db.py               # SQLite job history
+│   └── training.py                 # Training data ingestion
+├── training_data.json              # mfg_normalization map + known_manufacturers list
 ├── docs/
-│   ├── MFG_PN_Parsing_Agent_Spec.md           # Pipeline 1 specification
-│   ├── MRO_Part_Number_Processing_Spec.md     # Pipeline 2 specification
-│   └── SIM_BOM_Automation_Spec.md             # Pipeline 3 specification
+│   ├── MFG_PN_Parsing_Agent_Spec.md
+│   ├── MRO_Part_Number_Processing_Spec.md
+│   ├── SIM_BOM_Automation_Spec.md
+│   ├── TESTING_GUIDE.md
+│   └── GAMMA_PRESENTATION_METRICS.md
+├── tests/                          # Test suites (31 hardening + 4 smoke tests)
 ├── assets/
-│   ├── icon.ico                    # Windows app icon
-│   └── README.md                   # Icon generation guide
+│   ├── icon.ico                    # Windows icon
+│   └── icon.icns                   # macOS icon
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
-│   │   ├── bug_report.md
-│   │   ├── feature_request.md
-│   │   └── normalization_request.md
-│   ├── workflows/
-│   │   └── quality-checks.yml      # GitHub Actions CI
 │   └── pull_request_template.md
-├── build_windows.bat               # One-click Windows .exe builder
-├── requirements.txt                # Python dependencies
-├── .gitignore                      # Git exclusions
-├── LICENSE                         # Proprietary license (Wesco internal)
-├── CHANGELOG.md                    # Version history
-├── CONTRIBUTING.md                 # Contribution guidelines
-├── SECURITY.md                     # Security policy
-├── CLAUDE.md                       # Claude Code dev instructions
-└── README.md                       # ← You are here
+├── build_mac.sh                    # One-click macOS app builder
+├── build_windows.bat               # One-click Windows exe builder
+├── run_tests.sh                    # Test runner
+├── requirements.txt
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── README.md
 ```
 
 ### Technology Stack
@@ -493,87 +342,67 @@ Data_Parser/
 | **GUI Framework** | `customtkinter` — Modern themed Tkinter |
 | **Data Engine** | `pandas` — DataFrame manipulation |
 | **Excel I/O** | `openpyxl` — Read/write .xlsx files |
-| **Database** | SQLite3 — Local job history & configs |
-| **Packaging** | PyInstaller — Standalone .exe generation |
+| **Database** | SQLite3 — Local job history |
+| **Packaging** | PyInstaller — Standalone app generation |
 
 ---
 
 ## 🔍 QA Engine
 
-Every processing run automatically flags potential issues in the output:
+Every parse run automatically flags potential issues:
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `MFG_missing` | MFG cell is empty after processing | `""` |
-| `PN_missing` | PN cell is empty after processing | `""` |
-| `MFG_is_distributor` | MFG contains a distributor name | `GRAYBAR`, `CED`, `REXEL` |
-| `MFG_has_digits` | MFG contains numeric characters (likely a PN or code) | `PAND123`, `FOXBORO-200` |
-| `PN_same_as_MFG` | PN and MFG are identical (extraction error) | MFG: `PANDUIT`, PN: `PANDUIT` |
+| `MFG_missing` | MFG cell is empty after processing | — |
+| `PN_missing` | PN cell is empty after processing | — |
+| `PN_NOT_IN_SOURCE` | Extracted PN not found in source text — potential hallucination | audit manually |
+| `MFG_is_distributor` | MFG contains a known distributor name | `GRAYBAR`, `CED`, `REXEL` |
+| `MFG_has_digits` | MFG contains numerics (likely a PN or code) | `PAND123` |
+| `PN_same_as_MFG` | PN and MFG are identical (extraction error) | both = `PANDUIT` |
 | `CROUSE_variant` | CROUSE HINDS hyphenation inconsistency | `CROUSE HIND` vs `CROUSE HINDS` |
 | `SQUARED_variant` | SQUARE D formatting inconsistency | `SQ D` vs `SQUARE D` |
 
-Flagged rows are exported to a separate `*- QA Issues.xlsx` workbook for team review.
+Flagged rows are exported to a separate `*_QA.csv` file for team review.
 
 ---
 
 ## 📚 Manufacturer Normalization
 
-### Built-in Normalizations
-
-The parser includes a built-in normalization map that standardizes common MFG abbreviations found in Wesco MRO data:
+The engine handles common SAP short-text truncations and field abbreviations automatically:
 
 | Raw Value | Normalized To |
 |-----------|---------------|
 | `PANDT` | `PANDUIT` |
-| `CUTLR-HMR` | `CUTLER-HAMMER` |
+| `SEW EURODR` / `SEW EURO` | `SEW EURODRIVE` |
+| `BRU FOLC` | `BRUNO FOLCIERI` |
+| `CUTLR-HMR` / `CUTLER HMR` | `CUTLER-HAMMER` |
 | `CROUS HIND` | `CROUSE HINDS` |
 | `FXBRO` / `FXBRO INVN` | `FOXBORO` |
 | `T&BETTS` | `THOMAS & BETTS` |
 | `TOPWRX` | `TOPWORX` |
 | `SOUTHWRE` | `SOUTHWIRE` |
-| `SQ D` | `SQUARE D` |
-| `CUTLER HMR` | `CUTLER-HAMMER` |
+| `ALN BRDLY` / `A-B` | `ALLEN BRADLEY` |
+| `PHOENIX CNTCT` / `PHNX CNTCT` | `PHOENIX CONTACT` |
 
-**Full map:** See [`engine/parser_core.py`](engine/parser_core.py) → `NORMALIZE_MFG` dictionary
+**Full map:** `engine/parser_core.py` → `NORMALIZE_MFG` + `training_data.json` → `mfg_normalization`
 
-### Learned Normalizations (v2.1+)
-
-When you use the **🎓 Train from Files** feature, the parser automatically expands this normalization map by analyzing completed files. The current training data includes:
-
-```
-Built-in normalizations:  11 entries
-Learned normalizations:   155 entries (from training)
-Known manufacturers:      105 unique names
-
-Total coverage: 166 MFG variants recognized
-```
-
-**Examples of learned patterns:**
-- `SHAWMUT` → `FERRAZ SHAWMUT`
-- `STATIC-O` → `STATIC O-RING`
-- `UNTED ELEC` → `UNITED ELECTRIC`
-- `MICR MTION` → `MICRO MOTION`
-
-**To add more normalizations:**
-1. ✅ **Recommended:** Use the **Train from Files** feature (automatic)
-2. **Alternative:** Open a [Normalization Request](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=normalization_request.md) (manual)
+**Training data validation rule:** No key in `mfg_normalization` may match an entry in the `DISTRIBUTORS` set. This prevents distributor names from being ingested as manufacturer abbreviations.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] **v1.0** — Core parsing engine with 3 pipelines
-- [x] **v1.0** — Desktop GUI with import, preview, export
-- [x] **v1.0** — Processing history and saved configurations
-- [x] **v2.0** — Wesco branding and production-ready UI
-- [x] **v2.1** — Smart column detection with fuzzy matching
-- [x] **v2.1** — Self-learning engine (train from completed files)
-- [ ] **v2.2** — Batch processing (multiple files at once)
-- [ ] **v2.3** — Config export/import for team sharing (JSON format)
-- [ ] **v2.4** — Dark/Light theme toggle
-- [ ] **v3.0** — Custom normalization map editor in UI
-- [ ] **v3.1** — Network drive config sync for team-wide templates
-- [ ] **v3.2** — Excel macro integration (call parser from Excel VBA)
+- [x] **v1.0** — Core parsing engine with MFG/PN/SIM pipelines + desktop GUI
+- [x] **v2.0** — Wesco branding, production repository structure
+- [x] **v2.2** — Short Text format support, spec value rejection, prefix decoder, supplier fallback
+- [x] **v3.0** — Engine hardening: file profiler, confidence scoring, multi-strategy extraction, post-validation
+- [x] **v3.1** — Precision refinement: word-boundary MFG matching, descriptor blocklist, McMaster dash format, graduated heuristic confidence
+- [x] **v3.6** — Embedded code extraction (ABB drive PNs), plant code rejection, SEW/ULINE fixes
+- [x] **v4.0** — Training data patch: removed contaminated entries, added distributor validation gate
+- [x] **v5.0** — UI redesign: single-panel three-step flow, smart auto-detection, live preview, auto-export
+- [ ] **v5.1** — Batch processing (multiple files at once)
+- [ ] **v5.2** — Custom normalization map editor in UI
+- [ ] **v5.3** — Network drive sync for team-wide training data
 
 **Have a feature idea?** Open a [Feature Request](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=feature_request.md)
 
@@ -581,14 +410,11 @@ Total coverage: 166 MFG variants recognized
 
 ## 🤝 Contributing
 
-Contributions are welcome from Wesco team members! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Quick Links
+Contributions are welcome from Wesco team members. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 - [Report a Bug](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=bug_report.md)
 - [Request a Feature](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=feature_request.md)
 - [Request a Normalization](https://github.com/Nolan-Sulpizio/Data_Parser/issues/new?template=normalization_request.md)
-- [View Roadmap](#-roadmap)
 - [Security Policy](SECURITY.md)
 
 ---
@@ -609,7 +435,6 @@ This software is developed for internal use by Wesco International employees and
 **Team:** Global Accounts — Business Development Associates
 **Company:** Wesco International
 
-For questions, support, or feedback:
 - Microsoft Teams: @Nolan Sulpizio
 - GitHub Issues: [Create an issue](https://github.com/Nolan-Sulpizio/Data_Parser/issues)
 
@@ -628,7 +453,6 @@ Parsing logic derived from specifications authored by the Global Accounts team a
 
 <div align="center">
 
-
-Built wfor the Wesco Global Accounts Team
+Built for the Wesco Global Accounts Team
 
 </div>
