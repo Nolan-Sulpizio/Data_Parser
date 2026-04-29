@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Home Depot MFG-PN Bookmarklet</title>
+<style>
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;max-width:980px;margin:24px auto;padding:0 16px;color:#222}
+h1{margin-bottom:6px}
+.lede{color:#555;margin-top:0}
+.step{background:#fffbe6;border-left:3px solid #f7c948;padding:10px 14px;margin:12px 0}
+.note{background:#eef5ff;border-left:3px solid #1f6fdc;padding:10px 14px;margin:12px 0;font-size:13px}
+a.bookmarklet{display:inline-block;padding:14px 24px;background:#0a8754;color:#fff !important;text-decoration:none;border-radius:6px;font-weight:700;font-size:16px;cursor:grab}
+a.bookmarklet:hover{filter:brightness(.9)}
+a.bookmarklet:active{cursor:grabbing}
+code{background:#eee;padding:1px 4px;border-radius:3px}
+textarea{width:100%;height:240px;font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}
+.counter{font:12px ui-monospace,Menlo,monospace;color:#555;text-align:right;margin-top:4px}
+.counter.warn{color:#cc0000}
+.share{font-size:13px;color:#555;border-top:1px solid #eee;margin-top:32px;padding-top:12px}
+button.reset{background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;margin-left:8px}
+</style></head><body>
+
+<h1>Home Depot MFG-PN Bookmarklet</h1>
+<p class="lede">Edit the PN list below — the green bookmarklet rebuilds itself live. Drag it to your bookmarks bar, then click on a <code>homedepot.com</code> tab.</p>
+
+<h3>1. Paste your PN list</h3>
+<p style="font-size:13px;color:#555;margin-top:0">One per line. Either bare vendor PN, or <code>row_index,vendor_pn</code> (CSV). Blank lines and whitespace ignored. <button class="reset" onclick="resetToDefault()">reset to default (this bid sheet)</button></p>
+<textarea id="pn-input" oninput="rebuild()"></textarea>
+<div id="counter" class="counter">0 PNs</div>
+
+<h3>2. Drag this button to your bookmarks bar</h3>
+<p style="text-align:center;margin:36px 0;"><a id="bm" class="bookmarklet" href="#">Home Depot MFG-PN Runner</a></p>
+
+<div class="step">
+<b>3.</b> Switch to a <a href="https://www.homedepot.com/" target="_blank">homedepot.com</a> tab (logged in if applicable).<br>
+<b>4.</b> Click the bookmark you just dragged. Allow popups if Chrome prompts.<br>
+<b>5.</b> Floating overlay shows live progress; CSV is on your clipboard at the end.<br>
+<b>6.</b> Paste the CSV into <code>output/manual/home_depot_results.csv</code>, fill MFG / MFG Part Number / Status from the captured title/H1, and run <code>python tools/merge_manual.py</code>.
+</div>
+
+<div class="note">
+<b>What this captures vs. what you fill in:</b> the bookmarklet captures each PN's search-result URL, page title, and H1, then writes them to the Notes column with status <code>MANUAL_REVIEW</code>. Unlike the Grainger / McMaster / Uline bookmarklets which extract MFG/PN structurally, the long-tail vendors don't share a parseable title pattern, so the bookmarklet just gathers raw evidence. Review each row in the CSV and fill in MFG + MFG Part Number from the captured title.
+</div>
+
+<div class="note">
+<b>Re-using on a new bid sheet:</b> paste fresh PNs above. The bookmarklet rebuilds. <b>If you've already dragged the old version</b>, delete the old bookmark and re-drag the green button — bookmarks don't auto-update after they're saved.
+</div>
+
+<p class="share"><b>Share this file:</b> any colleague can drop it on their Desktop, double-click to open in Chrome, paste their own PNs, drag the green button to their bookmarks bar, and run it.</p>
+
+<script>
+const DEFAULT_PAIRS = [[177, "48-22-8912"], [178, "48-22-8913"]];
+const BODY_TEMPLATE = "(async function(){\n  var HOST_RE=/homedepot\\.com$/i;\n  if(!HOST_RE.test(location.hostname)){alert(\"Run on homedepot.com\");return;}\n  var PAIRS=__PAIRS_INLINE__;\n  var SEARCH_URL=\"https://www.homedepot.com/s/{PN}\";\n  var NAV_WAIT=4500;\n  var ov=document.createElement(\"div\");\n  ov.style.cssText=\"position:fixed;top:10px;right:10px;width:460px;max-height:78vh;overflow:auto;background:#0b1020;color:#d6deeb;padding:12px;border-radius:8px;font:12px ui-monospace,Menlo,monospace;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,.5)\";\n  ov.innerHTML=\"<div style='font-weight:700;color:#fff;margin-bottom:8px;font-size:13px'>Home Depot Runner \u2014 \"+PAIRS.length+\" PNs</div><div id=v-log></div>\";\n  document.body.appendChild(ov);\n  var logEl=ov.querySelector(\"#v-log\");\n  function log(t,c){var d=document.createElement(\"div\");d.textContent=t;if(c)d.style.color=c;logEl.appendChild(d);ov.scrollTop=1e9;}\n  var popup=window.open(SEARCH_URL.replace(\"{PN}\",\"\"),\"home_depot_runner\",\"width=1280,height=900\");\n  if(!popup){log(\"Popup blocked \u2014 allow popups for this site and re-click the bookmark\",\"#ef5350\");return;}\n  await new Promise(function(r){setTimeout(r,3000);});\n  function snapshot(doc, vendorPN){\n    var title=(doc.title||\"\").trim();\n    var h1=(function(){var e=doc.querySelector(\"h1\");return e?e.textContent.trim().replace(/\\s+/g,\" \"):\"\";})();\n    var bodyText=(doc.body&&doc.body.innerText||\"\").slice(0,4000);\n    var notFound=/page not found|404|no results|couldn'?t find|not available/i.test(title+\" \"+h1+\" \"+bodyText.slice(0,800));\n    return {title:title, h1:h1, notFound:notFound};\n  }\n  var out=[[\"row_index\",\"vendor_pn\",\"MFG\",\"MFG Part Number\",\"Description\",\"Source URL\",\"Lookup Status\",\"Lookup Notes\"]];\n  for(var i=0;i<PAIRS.length;i++){\n    var rowIdx=PAIRS[i][0],pn=PAIRS[i][1];\n    var url=SEARCH_URL.replace(\"{PN}\", encodeURIComponent(pn));\n    var row=[rowIdx,pn,\"\",\"\",\"\",url,\"MANUAL_REVIEW\",\"\"];\n    try{\n      if(popup.closed){log(\"Popup closed early \u2014 aborting\",\"#ef5350\");break;}\n      popup.location.href=url;\n      await new Promise(function(r){setTimeout(r,NAV_WAIT);});\n      var doc=null;try{doc=popup.document;}catch(e){doc=null;}\n      if(!doc){row[7]=\"popup cross-origin (login wall? captcha?)\";}\n      else{\n        var s=snapshot(doc, pn);\n        if(s.notFound){row[6]=\"NOT_FOUND\";row[7]=\"vendor returned not-found / no results page (title: \"+(s.title||\"\").slice(0,90)+\")\";}\n        else{\n          row[4]=s.h1||s.title;\n          row[5]=popup.location.href;\n          row[7]=\"captured page; verify MFG/PN by hand. Title: \"+(s.title||\"\").slice(0,120)+(s.h1?\" | H1: \"+s.h1.slice(0,90):\"\");\n        }\n      }\n    }catch(e){row[7]=\"err: \"+e.message;}\n    log(\"[\"+(i+1)+\"/\"+PAIRS.length+\"] \"+pn+\" -> \"+row[6]+\" \"+(row[4]||\"\").slice(0,40), row[6]===\"OK\"?\"#addb67\":(row[6]===\"NOT_FOUND\"?\"#f78c6c\":\"#82aaff\"));\n    out.push(row);\n  }\n  try{popup.close();}catch(e){}\n  var csv=out.map(function(r){return r.map(function(c){var s=String(c==null?\"\":c);return /[\",\\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s;}).join(\",\");}).join(\"\\n\");\n  try{await navigator.clipboard.writeText(csv);log(\"DONE \u2014 CSV copied to clipboard\",\"#addb67\");}\n  catch(e){var ta=document.createElement(\"textarea\");ta.value=csv;ta.style.cssText=\"width:100%;height:200px;margin-top:8px;font:11px monospace\";ov.appendChild(ta);ta.select();log(\"DONE \u2014 copy from textarea above\",\"#f78c6c\");}\n})();";
+
+function parseInput(text){
+  var out=[];
+  var auto=1;
+  text.split(/\r?\n/).forEach(function(line){
+    var s=line.trim();
+    if(!s)return;
+    var m=/^([0-9]+)\s*[,\t]\s*(.+?)\s*$/.exec(s);
+    if(m){out.push([parseInt(m[1],10), m[2]]); return;}
+    out.push([auto++, s]);
+  });
+  return out;
+}
+
+function rebuild(){
+  var ta=document.getElementById("pn-input");
+  var pairs=parseInput(ta.value);
+  var body=BODY_TEMPLATE.replace("__PAIRS_INLINE__", JSON.stringify(pairs));
+  document.getElementById("bm").href = "javascript:" + encodeURIComponent(body);
+  var counterEl=document.getElementById("counter");
+  counterEl.textContent = pairs.length + " PN" + (pairs.length===1?"":"s");
+  var len=document.getElementById("bm").href.length;
+  if(len > 30000){
+    counterEl.className = "counter warn";
+    counterEl.textContent += " — bookmarklet URL " + len + " chars (near Chrome's ~32K limit; split into batches)";
+  } else {
+    counterEl.className = "counter";
+  }
+}
+
+function resetToDefault(){
+  document.getElementById("pn-input").value = DEFAULT_PAIRS.map(function(p){return p[0]+","+p[1];}).join("\n");
+  rebuild();
+}
+
+resetToDefault();
+</script>
+</body></html>

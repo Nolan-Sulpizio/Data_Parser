@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MSC Industrial MFG-PN Bookmarklet</title>
+<style>
+body{font:14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;max-width:980px;margin:24px auto;padding:0 16px;color:#222}
+h1{margin-bottom:6px}
+.lede{color:#555;margin-top:0}
+.step{background:#fffbe6;border-left:3px solid #f7c948;padding:10px 14px;margin:12px 0}
+.note{background:#eef5ff;border-left:3px solid #1f6fdc;padding:10px 14px;margin:12px 0;font-size:13px}
+a.bookmarklet{display:inline-block;padding:14px 24px;background:#004890;color:#fff !important;text-decoration:none;border-radius:6px;font-weight:700;font-size:16px;cursor:grab}
+a.bookmarklet:hover{filter:brightness(.9)}
+a.bookmarklet:active{cursor:grabbing}
+code{background:#eee;padding:1px 4px;border-radius:3px}
+textarea{width:100%;height:240px;font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box}
+.counter{font:12px ui-monospace,Menlo,monospace;color:#555;text-align:right;margin-top:4px}
+.counter.warn{color:#cc0000}
+.share{font-size:13px;color:#555;border-top:1px solid #eee;margin-top:32px;padding-top:12px}
+button.reset{background:none;border:1px solid #ccc;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;margin-left:8px}
+</style></head><body>
+
+<h1>MSC Industrial MFG-PN Bookmarklet</h1>
+<p class="lede">Edit the PN list below — the green bookmarklet rebuilds itself live. Drag it to your bookmarks bar, then click on a mscdirect.com tab.</p>
+
+<h3>1. Paste your PN list</h3>
+<p style="font-size:13px;color:#555;margin-top:0">One per line. Either bare vendor PN, or <code>row_index,vendor_pn</code> (CSV). Leading/trailing whitespace and blank lines are ignored. <button class="reset" onclick="resetToDefault()">reset to default (this bid sheet)</button></p>
+<textarea id="pn-input" oninput="rebuild()"></textarea>
+<div id="counter" class="counter">0 PNs</div>
+
+<h3>2. Drag this button to your bookmarks bar</h3>
+<p style="text-align:center;margin:36px 0;"><a id="bm" class="bookmarklet" href="#">MSC Industrial MFG-PN Runner</a></p>
+
+<div class="step">
+<b>3.</b> Switch to a <a href="https://www.mscdirect.com/" target="_blank">mscdirect.com</a> tab.<br>
+<b>4.</b> Click the bookmark you just dragged. Allow popups if Chrome prompts.<br>
+<b>5.</b> Floating overlay shows live progress; CSV is on your clipboard at the end.
+</div>
+
+<div class="note">
+<b>Re-using this for a new bid sheet:</b> just paste fresh PNs into the textarea above. The bookmarklet rebuilds. <b>If you've already dragged the old version</b>, delete the old bookmark and re-drag the green button — bookmarks don't auto-update after they're saved.
+</div>
+
+<p class="share"><b>Share this file with the team:</b> any colleague can drop it on their Desktop, double-click to open in Chrome, paste their own PNs into the textarea, drag the green button to their bookmarks bar, and run it. No install, no login, no code — just their normal Chrome session.</p>
+
+<script>
+const DEFAULT_PAIRS = [[35, "53780409"], [36, "76962265"], [138, "11452174"], [139, "236513"], [159, "50516129"], [160, "09138512"], [170, "95460515"]];
+const BODY_TEMPLATE = "(async function(){\n  if(!location.hostname.endsWith(\"mscdirect.com\")){alert(\"Run on mscdirect.com\");return;}\n  var PAIRS=__PAIRS_INLINE__;\n  var NAV_WAIT=4500;\n  var ov=document.createElement(\"div\");\n  ov.style.cssText=\"position:fixed;top:10px;right:10px;width:440px;max-height:78vh;overflow:auto;background:#0b1020;color:#d6deeb;padding:12px;border-radius:8px;font:12px ui-monospace,Menlo,monospace;z-index:2147483647;box-shadow:0 4px 16px rgba(0,0,0,.5)\";\n  ov.innerHTML=\"<div style='font-weight:700;color:#fff;margin-bottom:8px;font-size:13px'>MSC Runner \u2014 \"+PAIRS.length+\" PNs</div><div id=v-log></div>\";\n  document.body.appendChild(ov);\n  var logEl=ov.querySelector(\"#v-log\");\n  function log(t,c){var d=document.createElement(\"div\");d.textContent=t;if(c)d.style.color=c;logEl.appendChild(d);ov.scrollTop=1e9;}\n  var popup=window.open(\"https://www.mscdirect.com/\",\"msc_runner\",\"width=1280,height=900\");\n  if(!popup){log(\"Popup blocked\",\"#ef5350\");return;}\n  await new Promise(function(r){setTimeout(r,3000);});\n  function extract(doc, bodyText, vendorPN){\n    if(/access denied|forbidden|just a moment/i.test((doc.title||\"\")+bodyText.slice(0,2000)))return{status:\"BLOCKED\"};\n    if(/replaced by|new item number/i.test(bodyText.slice(0,8000)))return{status:\"DISCONTINUED\",notes:\"MSC indicates item replaced\"};\n    if(/page not found|404|item not found/i.test(doc.title||\"\"))return{status:\"NOT_FOUND\"};\n    var lines=bodyText.split(/\\n+/).map(function(s){return s.trim();}).filter(Boolean);\n    var mfg_pn=null;\n    for(var i=0;i<lines.length;i++){\n      var L=lines[i];\n      var im=/^Mfr\\s*#\\s+([A-Za-z0-9\\-\\.\\/\\s]+?)$/i.exec(L);\n      if(im){mfg_pn=im[1].trim();break;}\n      if(/^Mfr\\s*#?:?$/i.test(L) && i+1<lines.length){mfg_pn=lines[i+1];break;}\n    }\n    if(!mfg_pn){var m=/Mfr\\s*#\\s*([A-Za-z0-9\\-\\.\\/]+)/i.exec(bodyText);if(m)mfg_pn=m[1].trim();}\n    var brand=null;\n    var SKIP=/^(MSC|Mfr|Big\\s*Book|Web\\s*Price|Total|Quantity|Price|Add|Sign|In\\s*Stock|Get|Need|HOME|SHOP|ORDER|HELP|MY|VIEW|FREE|SHIPS|Y\\d+)/i;\n    for(var j=0;j<Math.min(lines.length,60);j++){\n      var L2=lines[j];\n      if(L2.length<2||L2.length>40)continue;\n      if(SKIP.test(L2))continue;\n      if(/^[A-Z][A-Z0-9 &\\-\\.]+$/.test(L2)){\n        if(/^[A-F0-9 \\-]+$/.test(L2))continue;\n        brand=L2;break;\n      }\n    }\n    var h1=doc.querySelector(\"h1\");\n    var description=h1?h1.textContent.trim():null;\n    if(mfg_pn||brand) return {mfg:brand, mfg_pn:mfg_pn||vendorPN, description:description, notes: brand?\"\":\"brand not detected \u2014 verify manually\"};\n    return null;\n  }\n  var out=[[\"row_index\",\"vendor_pn\",\"MFG\",\"MFG Part Number\",\"Description\",\"Source URL\",\"Lookup Status\",\"Lookup Notes\"]];\n  for(var i=0;i<PAIRS.length;i++){\n    var rowIdx=PAIRS[i][0],pn=PAIRS[i][1];\n    var url=\"https://www.mscdirect.com/product/details/\"+encodeURIComponent(pn);\n    var row=[rowIdx,pn,\"\",\"\",\"\",url,\"MANUAL_REVIEW\",\"\"];\n    try{\n      if(popup.closed){log(\"Popup closed\",\"#ef5350\");break;}\n      popup.location.href=url;\n      await new Promise(function(r){setTimeout(r,NAV_WAIT);});\n      var doc=null;try{doc=popup.document;}catch(e){doc=null;}\n      if(!doc){row[7]=\"popup cross-origin\";}\n      else{\n        var bodyText=(doc.body&&doc.body.innerText)||\"\";\n        var r=null;try{r=extract(doc,bodyText,pn);}catch(e){r=null;}\n        if(!r){row[7]=\"extractor null\";}\n        else if(r.status===\"BLOCKED\"){row[7]=\"anti-bot blocked\";}\n        else if(r.status===\"NOT_FOUND\"){row[6]=\"NOT_FOUND\";row[7]=\"vendor returned not-found\";}\n        else if(r.status===\"DISCONTINUED\"){row[6]=\"DISCONTINUED\";row[2]=r.mfg||\"\";row[3]=r.mfg_pn||\"\";row[4]=r.description||\"\";row[7]=r.notes||\"\";}\n        else{row[2]=r.mfg||\"\";row[3]=r.mfg_pn||\"\";row[4]=r.description||\"\";row[5]=popup.location.href;row[6]=(r.mfg&&r.mfg_pn)?\"OK\":\"MANUAL_REVIEW\";row[7]=r.notes||(!r.mfg?\"MFG_PN found, brand missing\":\"\");}\n      }\n    }catch(e){row[7]=\"err: \"+e.message;}\n    log(\"[\"+(i+1)+\"/\"+PAIRS.length+\"] \"+pn+\" -> \"+row[6]+\" \"+row[2]+\"/\"+row[3], row[6]===\"OK\"?\"#addb67\":\"#f78c6c\");\n    out.push(row);\n  }\n  try{popup.close();}catch(e){}\n  var csv=out.map(function(r){return r.map(function(c){var s=String(c==null?\"\":c);return /[\",\\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s;}).join(\",\");}).join(\"\\n\");\n  try{await navigator.clipboard.writeText(csv);log(\"DONE \u2014 CSV copied to clipboard\",\"#addb67\");}\n  catch(e){var ta=document.createElement(\"textarea\");ta.value=csv;ta.style.cssText=\"width:100%;height:200px;margin-top:8px;font:11px monospace\";ov.appendChild(ta);ta.select();log(\"DONE \u2014 copy from textarea above\",\"#f78c6c\");}\n})();";
+
+function parseInput(text){
+  // Returns array of [row_index, vendor_pn]. row_index is the user-supplied
+  // value if given, otherwise auto-numbered from 1.
+  var out=[];
+  var auto=1;
+  text.split(/\r?\n/).forEach(function(line){
+    var s=line.trim();
+    if(!s)return;
+    // Comma-or-tab separated: <row_index>,<vendor_pn>
+    var m=/^([0-9]+)\s*[,\t]\s*(.+?)\s*$/.exec(s);
+    if(m){out.push([parseInt(m[1],10), m[2]]); return;}
+    // Bare PN — auto number
+    out.push([auto++, s]);
+  });
+  return out;
+}
+
+function rebuild(){
+  var ta=document.getElementById("pn-input");
+  var pairs=parseInput(ta.value);
+  var body=BODY_TEMPLATE.replace("__PAIRS_INLINE__", JSON.stringify(pairs));
+  document.getElementById("bm").href = "javascript:" + encodeURIComponent(body);
+  var counterEl=document.getElementById("counter");
+  counterEl.textContent = pairs.length + " PN" + (pairs.length===1?"":"s");
+  // Warn if URL is approaching Chrome's bookmarklet length limit (~32 KB)
+  var len=document.getElementById("bm").href.length;
+  if(len > 30000){
+    counterEl.className = "counter warn";
+    counterEl.textContent += " — bookmarklet URL " + len + " chars (near Chrome's ~32K limit; split into batches if it stops working)";
+  } else {
+    counterEl.className = "counter";
+  }
+}
+
+function resetToDefault(){
+  document.getElementById("pn-input").value = DEFAULT_PAIRS.map(function(p){return p[0]+","+p[1];}).join("\n");
+  rebuild();
+}
+
+resetToDefault();
+</script>
+</body></html>
